@@ -1,0 +1,24 @@
+name: Auto-Sync Spends
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Runs automatically every 6 hours
+  workflow_dispatch: # Allows you to trigger it manually anytime you want
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install google-auth-oauthlib google-auth-httplib2 google-api-python-client supabase
+      - name: Inject Token
+        run: echo '${{ secrets.GMAIL_TOKEN_JSON }}' > token.json
+      - name: Run Script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python main.py
