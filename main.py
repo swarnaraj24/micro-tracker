@@ -15,23 +15,40 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def parse_transaction(snippet):
-    amount_match = re.search(r'(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)', snippet, re.IGNORECASE)
-    if not amount_match:
-        return None
-    
-    try:
-        amount = float(amount_match.group(1).replace(',', ''))
-    except ValueError:
-        return None
-
     lower_snippet = snippet.lower()
     
-    if 'credit card' in lower_snippet or 'ending xx' in lower_snippet or 'card' in lower_snippet:
+    # 1. Look for transaction indicators to ensure it's a financial alert
+    if not any(keyword in lower_snippet for keyword in ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn', 'upi']):
+        return None
+
+    # 2. Flexible amount extractor: finds numbers near currency or standard transaction phrasing
+    # Matches formats like: 500, 1,250.00, 45.50
+    amounts = re.findall(r'(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', snippet)
+    
+    if not amounts:
+        return None
+    
+    # Take the last or largest reasonable numeric match as the transaction amount
+    valid_amounts = []
+    for a in amounts:
+        try:
+            val = float(a.replace(',', ''))
+            if val > 0:
+                valid_amounts.append(val)
+        except ValueError:
+            continue
+            
+    if not valid_amounts:
+        return None
+        
+    amount = max(valid_amounts) # Usually the total transaction amount is the prominent figure
+
+    if 'credit card' in lower_snippet or 'ending' in lower_snippet or 'card' in lower_snippet:
         mode = 'Credit Card'
     else:
         mode = 'UPI / Debit'
         
-    tx_type = 'income' if 'credited' in lower_snippet or 'received' in lower_snippet or 'added' in lower_snippet else 'expense'
+    tx_type = 'income' if any(w in lower_snippet for w in ['credited', 'received', 'added', 'refund']) else 'expense'
         
     return {
         "amount": round(amount, 2),
@@ -42,16 +59,17 @@ def parse_transaction(snippet):
 
 def sync_transactions():
     service = get_gmail_service()
-    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR UPI OR VPA OR PayTM OR PhonePe OR GooglePay OR HDFC OR SBI OR ICICI OR Axis)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=30).execute()
+    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR UPI OR PayTM OR PhonePe OR GooglePay OR HDFC OR SBI OR ICICI OR Axis OR Bank)'
+    results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
     messages = results.get('messages', [])
 
-    print(f"Found {len(messages)} targeted financial messages.")
+    print(f"Scanning {len(messages)} messages for transactions...")
 
     if not messages:
         print("No messages found.")
         return
 
+    logged_count = 0
     for msg in messages:
         msg_id = msg['id']
         
@@ -74,8 +92,11 @@ def sync_transactions():
                 }
                 supabase.table('transactions').insert(row).execute()
                 print(f"SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+                logged_count += 1
         except Exception as e:
             print(f"Skipping message due to error: {e}")
+            
+    print(f"Sync complete. Successfully logged {logged_count} new transactions.")
 
 if __name__ == '__main__':
     sync_transactions()
