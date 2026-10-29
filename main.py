@@ -165,7 +165,7 @@ def sync_transactions():
                     "payment_mode": str(tx["payment_mode"]),
                     "type": str(tx["type"]),
                     "description": str(tx["description"]),
-                    "date": str(tx["date"])
+                    "date": str(tx["date"]) # Explicitly mapping to the new 'date' column
                 }
                 supabase.table('transactions').insert(row).execute()
                 print(f"--> LOGGED [{tx['date']}]: ₹{tx['amount']} via {tx['payment_mode']}")
