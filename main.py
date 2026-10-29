@@ -155,7 +155,7 @@ def sync_transactions():
             payload = message.get('payload', {})
             if 'parts' in payload:
                 for part in payload['parts']:
-                    if part.get('mimeType') == 'text/plain':  # Fixed bracket syntax error here
+                    if part.get('mimeType') == 'text/plain':
                         data = part.get('body', {}).get('data', '')
                         if data:
                             import base64
