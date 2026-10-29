@@ -1,6 +1,7 @@
 import os
 import re
 import datetime
+import email.utils
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from supabase import create_client, Client
@@ -16,7 +17,7 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Removes junk/promotional entries from Supabase."""
+    """Automatically removes previously logged promotional or junk entries from Supabase."""
     junk_patterns = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
         'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
@@ -28,36 +29,26 @@ def purge_unwanted_records():
         except Exception as e:
             print(f"Purge note for {pattern}: {e}")
 
-def extract_transaction_date(text, email_timestamp_ms):
-    """Attempts to find an actual transaction date inside the email text, else uses email timestamp."""
-    # Look for patterns like 28-Oct-2026, 28/10/2026, 28-10-2026
-    date_patterns = [
-        r'([0-9]{1,2})[-/]([A-Za-z]{3})[-/]([0-9]{2,4})', # 28-Oct-26 or 28/Oct/2026
-        r'([0-9]{1,2})[-/]([0-9]{1,2})[-/]([0-9]{2,4})'     # 28/10/2026
-    ]
-    
-    for pattern in date_patterns:
-        match = re.search(pattern, text)
-        if match:
+def extract_transaction_date(message_headers, email_timestamp_ms):
+    """Extracts the exact transaction date from the email's official RFC 2822 'Date' header."""
+    for header in message_headers:
+        if header.get('name', '').lower() == 'date':
+            date_str = header.get('value', '')
             try:
-                # Try parsing the found date string
-                matched_str = match.group(0)
-                for fmt in ('%d-%b-%Y', '%d/%b/%Y', '%d-%b-%y', '%d/%b/%y', '%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y'):
-                    try:
-                        parsed_date = datetime.datetime.strptime(matched_str, fmt)
-                        return parsed_date.strftime('%Y-%m-%d')
-                    except ValueError:
-                        continue
+                parsed_tuple = email.utils.parsedate_tz(date_str)
+                if parsed_tuple:
+                    timestamp = email.utils.mktime_tz(parsed_tuple)
+                    return datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
             except Exception:
                 pass
                 
-    # Fallback to Gmail message internal timestamp
+    # Fallback to Gmail internal timestamp if header parsing fails
     if email_timestamp_ms:
         return datetime.datetime.fromtimestamp(int(email_timestamp_ms) / 1000.0).strftime('%Y-%m-%d')
         
     return datetime.datetime.now().strftime('%Y-%m-%d')
 
-def parse_transaction(snippet, subject, body="", internal_date_ms=0):
+def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0):
     combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
@@ -113,11 +104,11 @@ def parse_transaction(snippet, subject, body="", internal_date_ms=0):
     else:
         mode = 'UPI / Card'
         
-    # Transaction Type
+    # Transaction Type (Income vs Expense)
     tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
     
-    # Get accurate transaction date
-    tx_date = extract_transaction_date(combined_text, internal_date_ms)
+    # Get accurate transaction date from headers
+    tx_date = extract_transaction_date(headers, internal_date_ms)
         
     return {
         "amount": round(amount, 2),
@@ -133,7 +124,7 @@ def sync_transactions():
     
     service = get_gmail_service()
     
-    # Broaden query to catch everything cleanly over the past 45 days
+    # Broad query to catch financial alerts over the past 45 days
     query = 'newer_than:45d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn)'
     results = service.users().messages().list(userId='me', q=query, maxResults=150).execute()
     messages = results.get('messages', [])
@@ -166,7 +157,7 @@ def sync_transactions():
                             body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
                             break
 
-            tx = parse_transaction(snippet, subject, body, internal_date_ms)
+            tx = parse_transaction(snippet, subject, body, headers, internal_date_ms)
             if tx:
                 row = {
                     "email_id": str(msg_id),
