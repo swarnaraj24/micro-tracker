@@ -89,7 +89,7 @@
         // Supabase Configuration
         const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtraG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjM2NzE2NzAzN30.R_rYm0E8c90Kjl8QxW5Zl0y7vQv8r0Kjl8QxW5Zl0y7';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let paymentChartInstance = null;
         let incomeChartInstance = null;
@@ -97,7 +97,7 @@
         async function loadDashboard() {
             try {
                 // Fetch transactions sorted in descending order (newest first)
-                const { data: transactions, error } = await supabase
+                const { data: transactions, error } = await dbClient
                     .from('transactions')
                     .select('*')
                     .order('date', { ascending: false });
@@ -203,7 +203,7 @@
             });
         }
 
-        // Expose loadDashboard globally to resolve click reference errors
+        // Expose loadDashboard globally
         window.loadDashboard = loadDashboard;
 
         // Initialize dashboard on page load
