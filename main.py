@@ -15,19 +15,28 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def parse_transaction(snippet):
-    amount_match = re.search(r'(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)', snippet, re.IGNORECASE)
+    # Flexible amount matcher: looks for currency or standard number patterns
+    amount_match = re.search(r'(?:Rs\.?|INR|₹|HDFC|ICICI|SBI|Axis|Paytm|PhonePe|GPay)?\s*([\d,]+\.\d{2})', snippet, re.IGNORECASE)
+    if not amount_match:
+        # Fallback regex for standard amounts
+        amount_match = re.search(r'(?:Rs\.?|INR|₹)\s*([\d,]+)', snippet, re.IGNORECASE)
+        
     if not amount_match:
         return None
     
-    amount = float(amount_match.group(1).replace(',', ''))
+    try:
+        amount = float(amount_match.group(1).replace(',', ''))
+    except ValueError:
+        return None
+
     lower_snippet = snippet.lower()
     
-    if 'credit card' in lower_snippet or 'ending xx' in lower_snippet:
+    if 'credit card' in lower_snippet or 'ending xx' in lower_snippet or 'card' in lower_snippet:
         mode = 'Credit Card'
     else:
         mode = 'UPI / Debit'
         
-    tx_type = 'income' if 'credited' in lower_snippet or 'received' in lower_snippet else 'expense'
+    tx_type = 'income' if 'credited' in lower_snippet or 'received' in lower_snippet or 'added' in lower_snippet else 'expense'
         
     return {
         "amount": amount,
@@ -38,15 +47,11 @@ def parse_transaction(snippet):
 
 def sync_transactions():
     service = get_gmail_service()
-    # Broader query to catch all bank/UPI alerts
-    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR alert OR transaction OR bank OR UPI OR paid to OR transferred)'
-    results = service.users().messages().list(userId='me', q=query).execute()
+    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR alert OR transaction OR INR OR Rs)'
+    results = service.users().messages().list(userId='me', q=query, maxResults=20).execute()
     messages = results.get('messages', [])
 
-    print(f"Found {len(messages)} messages matching query.")
-
-    if not messages:
-        return
+    print(f"Checking {len(messages)} messages...")
 
     for msg in messages:
         msg_id = msg['id']
@@ -68,9 +73,9 @@ def sync_transactions():
                 "description": tx["description"]
             }
             supabase.table('transactions').insert(row).execute()
-            print(f"Logged [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+            print(f"SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
         else:
-            print(f"Skipped snippet (no amount/match): {snippet[:60]}...")
+            print(f"SKIPPED SNIPPET: {snippet}")
 
 if __name__ == '__main__':
     sync_transactions()
