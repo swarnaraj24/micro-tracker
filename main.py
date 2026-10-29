@@ -17,11 +17,12 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Removes junk/promotional entries from Supabase."""
+    """Removes junk, promotional, and social notification entries from Supabase."""
     junk_patterns = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
         'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
-        'bonus', 'smartemi', 'registration', 'welcome', 'save up to'
+        'bonus', 'smartemi', 'registration', 'welcome', 'save up to', 
+        'awkward', 'friend', 'profile', 'connection', 'reminder'
     ]
     for pattern in junk_patterns:
         try:
@@ -30,7 +31,6 @@ def purge_unwanted_records():
             print(f"Purge note for {pattern}: {e}")
 
 def extract_transaction_date(message_headers, email_timestamp_ms):
-    """Extracts exact date from email headers or falls back to internal timestamp."""
     for header in message_headers:
         if header.get('name', '').lower() == 'date':
             date_str = header.get('value', '')
@@ -51,17 +51,17 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
-    # 1. HARD BLOCK: Promotional or marketing emails
+    # 1. HARD BLOCK: Drop marketing, social alerts, or promotional clutter
     blocklist = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 
         'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 
         'smartemi', 'registration', 'welcome', 'save up to', 'health benefits', 
-        'interest rate starts', 'car loan'
+        'interest rate starts', 'car loan', 'awkward', 'profile', 'connection'
     ]
     if any(b in lower_text for b in blocklist):
         return None
 
-    # 2. REQUIRED: Action words confirming money moved
+    # 2. REQUIRED: Must contain explicit banking action words confirming money movement
     action_keywords = ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn']
     if not any(act in lower_text for act in action_keywords):
         return None
@@ -91,7 +91,7 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     if amount > 200000 and 'salary' not in lower_text:
         return None
 
-    # Check if this is a Credit Card Bill Payment / Settlement (NOT Income!)
+    # Check strictly if this is a Credit Card Bill Payment / Settlement (NOT Income!)
     is_cc_payment = ('payment received on your' in lower_text and 'credit card' in lower_text) or 'card payment' in lower_text
 
     # Determine Payment Mode
@@ -106,12 +106,13 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     else:
         mode = 'UPI / Card'
         
-    # Transaction Type classification
+    # Transaction Type Classification
     if is_cc_payment:
         tx_type = 'bill_payment'
         mode = 'CC Bill Payment'
     else:
-        tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
+        # Only true salary, direct bank credits, or verified refunds count as income
+        tx_type = 'income' if any(w in lower_text for w in ['credited', 'salary', 'refund']) and 'credit card' not in lower_text else 'expense'
     
     tx_date = extract_transaction_date(headers, internal_date_ms)
         
@@ -124,12 +125,11 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     }
 
 def sync_transactions():
-    print("Starting enhanced sync workflow...")
+    print("Starting hardened sync workflow...")
     purge_unwanted_records()
     
     service = get_gmail_service()
     
-    # Expanded query to ensure today's messages and recent transactions are fully retrieved
     query = 'newer_than:60d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn OR payment)'
     results = service.users().messages().list(userId='me', q=query, maxResults=200).execute()
     messages = results.get('messages', [])
@@ -155,7 +155,7 @@ def sync_transactions():
             payload = message.get('payload', {})
             if 'parts' in payload:
                 for part in payload['parts']:
-                    if part.get('mimeType') == 'text/plain':
+                    if part.get('mimeType'] == 'text/plain':
                         data = part.get('body', {}).get('data', '')
                         if data:
                             import base64
