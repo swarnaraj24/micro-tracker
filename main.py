@@ -17,7 +17,6 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Removes junk, promotional, and social notification entries from Supabase."""
     junk_patterns = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
         'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
@@ -51,7 +50,6 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
-    # 1. HARD BLOCK: Drop marketing, social alerts, or promotional clutter
     blocklist = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 
         'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 
@@ -61,12 +59,10 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     if any(b in lower_text for b in blocklist):
         return None
 
-    # 2. REQUIRED: Must contain explicit banking action words confirming money movement
     action_keywords = ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn']
     if not any(act in lower_text for act in action_keywords):
         return None
 
-    # Extract amount safely
     amounts = re.findall(r'(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', combined_text)
     if not amounts:
         amounts = re.findall(r'\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})\b', combined_text)
@@ -91,10 +87,8 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     if amount > 200000 and 'salary' not in lower_text:
         return None
 
-    # Check strictly if this is a Credit Card Bill Payment / Settlement (NOT Income!)
     is_cc_payment = ('payment received on your' in lower_text and 'credit card' in lower_text) or 'card payment' in lower_text
 
-    # Determine Payment Mode
     if 'icici' in lower_text:
         mode = 'ICICI Bank'
     elif 'hdfc' in lower_text:
@@ -106,12 +100,10 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     else:
         mode = 'UPI / Card'
         
-    # Transaction Type Classification
     if is_cc_payment:
         tx_type = 'bill_payment'
         mode = 'CC Bill Payment'
     else:
-        # Only true salary, direct bank credits, or verified refunds count as income
         tx_type = 'income' if any(w in lower_text for w in ['credited', 'salary', 'refund']) and 'credit card' not in lower_text else 'expense'
     
     tx_date = extract_transaction_date(headers, internal_date_ms)
