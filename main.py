@@ -15,8 +15,12 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Automatically sweeps and deletes previously logged promotional/junk rows from Supabase."""
-    junk_patterns = ['offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 'upgrade', 'pre-approved']
+    """Removes previously logged junk/promotional entries from Supabase."""
+    junk_patterns = [
+        'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
+        'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
+        'bonus', 'charges', 'smartemi', 'registration', 'welcome'
+    ]
     for pattern in junk_patterns:
         try:
             supabase.table('transactions').delete().ilike('description', f'%{pattern}%').execute()
@@ -27,16 +31,22 @@ def parse_transaction(snippet, subject, body=""):
     combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
-    # Ignore purely promotional junk, loans, and policy updates unless they represent a clear transaction
-    junk_keywords = ['offer on credit', 'loan of up to', 'policy update', 'gtt and cuspa', 'pre-approved loan', 'credit limit increase']
-    if any(j in lower_text for j in junk_keywords) and not any(w in lower_text for w in ['debited', 'spent', 'paid', 'credited', 'received']):
+    # 1. HARD BLOCK: If any promotional or marketing words are present, drop it immediately.
+    blocklist = [
+        'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 
+        'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 'charges', 
+        'smartemi', 'registration', 'welcome', 'save up to', 'health benefits', 
+        'interest rate starts'
+    ]
+    if any(b in lower_text for b in blocklist):
         return None
 
-    # Must contain financial transaction indicators
-    if not any(keyword in lower_text for keyword in ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn', 'upi', 'rs.', 'inr', '₹', 'used for a transaction']):
+    # 2. REQUIRED: Must contain explicit action words confirming money actually moved.
+    action_keywords = ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred']
+    if not any(act in lower_text for act in action_keywords):
         return None
 
-    # Extract amount
+    # Extract amount safely
     amounts = re.findall(r'(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', combined_text)
     if not amounts:
         amounts = re.findall(r'\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})\b', combined_text)
@@ -58,13 +68,23 @@ def parse_transaction(snippet, subject, body=""):
         
     amount = max(valid_amounts)
 
-    # Determine payment mode gracefully
-    if 'rupay' in lower_text or 'credit card' in lower_text or 'card ending' in lower_text:
-        mode = 'Credit Card / RuPay'
+    # Filter out unrealistically massive numbers accidentally picked up (like 25,000 account charges)
+    if amount > 200000 and 'salary' not in lower_text:
+        return None
+
+    # Accurate Payment Mode Detection
+    if 'icici' in lower_text:
+        mode = 'ICICI Bank'
+    elif 'hdfc' in lower_text:
+        mode = 'HDFC Bank'
+    elif 'rupay' in lower_text:
+        mode = 'RuPay Credit Card'
+    elif 'upi' in lower_text or 'vpa' in lower_text or '@' in lower_text:
+        mode = 'UPI'
     else:
-        mode = 'UPI / Debit'
+        mode = 'UPI / Card'
         
-    # Transaction Type (Income vs Expense)
+    # Income vs Expense classification
     tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
         
     return {
@@ -75,15 +95,15 @@ def parse_transaction(snippet, subject, body=""):
     }
 
 def sync_transactions():
-    print("Starting sync workflow...")
+    print("Starting clean sync workflow...")
     
-    # Automatically clean up any existing promo/junk entries in Supabase first
+    # Automatically clean out past junk rows from Supabase
     purge_unwanted_records()
     
     service = get_gmail_service()
     
-    # Broad query to catch all bank, UPI, and card transaction alerts
-    query = 'newer_than:14d (debited OR spent OR paid OR credited OR received OR UPI OR HDFC OR ICICI OR SBI OR Rs OR INR OR "used for a transaction")'
+    # Targeted query focusing purely on actual financial movement
+    query = 'newer_than:7d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC)'
     results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
     messages = results.get('messages', [])
 
