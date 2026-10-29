@@ -48,20 +48,23 @@ def parse_transaction(snippet):
 def sync_transactions():
     service = get_gmail_service()
     query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR alert OR transaction OR INR OR Rs)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=20).execute()
+    results = service.users().messages().list(userId='me', q=query, maxResults=10).execute()
     messages = results.get('messages', [])
 
-    print(f"Checking {len(messages)} messages...")
+    print(f"Raw Gmail search results keys: {results.keys()}")
+    print(f"Messages list type: {type(messages)}, length: {len(messages)}")
 
-    for msg in messages:
+    if not messages:
+        print("No messages found in list.")
+        return
+
+    for i, msg in enumerate(messages):
         msg_id = msg['id']
+        print(f"Fetching message {i+1} ID: {msg_id}")
         
-        existing = supabase.table('transactions').select('id').eq('email_id', msg_id).execute()
-        if existing.data:
-            continue
-
         message = service.users().messages().get(userId='me', id=msg_id).execute()
         snippet = message.get('snippet', '')
+        print(f"Snippet found: {snippet[:80]}")
         
         tx = parse_transaction(snippet)
         if tx:
@@ -73,9 +76,9 @@ def sync_transactions():
                 "description": tx["description"]
             }
             supabase.table('transactions').insert(row).execute()
-            print(f"SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+            print(f"--> SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
         else:
-            print(f"SKIPPED SNIPPET: {snippet}")
+            print(f"--> SKIPPED (No regex match)")
 
 if __name__ == '__main__':
     sync_transactions()
