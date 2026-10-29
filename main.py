@@ -103,4 +103,30 @@ def sync_transactions():
             if 'parts' in payload:
                 for part in payload['parts']:
                     if part.get('mimeType') == 'text/plain':
-                        data = part.
+                        data = part.get('body', {}).get('data', '')
+                        if data:
+                            import base64
+                            body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                            break
+
+            tx = parse_transaction(snippet, subject, body)
+            if tx:
+                row = {
+                    "email_id": str(msg_id),
+                    "amount": float(tx["amount"]),
+                    "payment_mode": str(tx["payment_mode"]),
+                    "type": str(tx["type"]),
+                    "description": str(tx["description"])
+                }
+                supabase.table('transactions').insert(row).execute()
+                print(f"--> SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+                logged_count += 1
+            else:
+                print(f" -> Regex/Keywords did not match snippet/body.")
+        except Exception as e:
+            print(f"Skipping message due to error: {e}")
+            
+    print(f"Sync complete. Successfully logged {logged_count} new transactions.")
+
+if __name__ == '__main__':
+    sync_transactions()
