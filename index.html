@@ -20,7 +20,7 @@
                 <h1 class="text-2xl font-bold text-gray-800">Micro Finance Tracker</h1>
                 <p class="text-sm text-gray-500">Automated Gmail Transaction Parser & Analytics</p>
             </div>
-            <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm">
+            <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm cursor-pointer">
                 Refresh Data
             </button>
         </header>
@@ -88,8 +88,8 @@
     <script>
         // Supabase Configuration
         const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtraG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjM2NzE2NzAzN30.R_rYm0E8c90Kjl8QxW5Zl0y7vQv8r0Kjl8QxW5Zl0y7'; // Replace with your public anon key if needed
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtraG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjM2NzE2NzAzN30.R_rYm0E8c90Kjl8QxW5Zl0y7vQv8r0Kjl8QxW5Zl0y7';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let paymentChartInstance = null;
         let incomeChartInstance = null;
@@ -202,6 +202,9 @@
                 }
             });
         }
+
+        // Expose loadDashboard globally to resolve click reference errors
+        window.loadDashboard = loadDashboard;
 
         // Initialize dashboard on page load
         loadDashboard();
