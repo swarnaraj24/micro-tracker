@@ -17,11 +17,11 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Automatically removes previously logged promotional or junk entries from Supabase."""
+    """Removes junk/promotional entries from Supabase."""
     junk_patterns = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
         'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
-        'bonus', 'charges', 'smartemi', 'registration', 'welcome', 'save up to'
+        'bonus', 'smartemi', 'registration', 'welcome', 'save up to'
     ]
     for pattern in junk_patterns:
         try:
@@ -30,7 +30,7 @@ def purge_unwanted_records():
             print(f"Purge note for {pattern}: {e}")
 
 def extract_transaction_date(message_headers, email_timestamp_ms):
-    """Extracts the exact transaction date from the email's official RFC 2822 'Date' header."""
+    """Extracts exact date from email headers or falls back to internal timestamp."""
     for header in message_headers:
         if header.get('name', '').lower() == 'date':
             date_str = header.get('value', '')
@@ -42,7 +42,6 @@ def extract_transaction_date(message_headers, email_timestamp_ms):
             except Exception:
                 pass
                 
-    # Fallback to Gmail internal timestamp if header parsing fails
     if email_timestamp_ms:
         return datetime.datetime.fromtimestamp(int(email_timestamp_ms) / 1000.0).strftime('%Y-%m-%d')
         
@@ -52,17 +51,17 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
-    # 1. HARD BLOCK: Drop promotional or marketing emails immediately
+    # 1. HARD BLOCK: Promotional or marketing emails
     blocklist = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 
-        'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 'charges', 
+        'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 
         'smartemi', 'registration', 'welcome', 'save up to', 'health benefits', 
         'interest rate starts', 'car loan'
     ]
     if any(b in lower_text for b in blocklist):
         return None
 
-    # 2. REQUIRED: Must contain explicit action words confirming money actually moved
+    # 2. REQUIRED: Action words confirming money moved
     action_keywords = ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn']
     if not any(act in lower_text for act in action_keywords):
         return None
@@ -92,7 +91,10 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     if amount > 200000 and 'salary' not in lower_text:
         return None
 
-    # Determine accurate payment mode
+    # Check if this is a Credit Card Bill Payment / Settlement (NOT Income!)
+    is_cc_payment = ('payment received on your' in lower_text and 'credit card' in lower_text) or 'card payment' in lower_text
+
+    # Determine Payment Mode
     if 'icici' in lower_text:
         mode = 'ICICI Bank'
     elif 'hdfc' in lower_text:
@@ -104,10 +106,13 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     else:
         mode = 'UPI / Card'
         
-    # Transaction Type (Income vs Expense)
-    tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
+    # Transaction Type classification
+    if is_cc_payment:
+        tx_type = 'bill_payment'
+        mode = 'CC Bill Payment'
+    else:
+        tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
     
-    # Get accurate transaction date from headers
     tx_date = extract_transaction_date(headers, internal_date_ms)
         
     return {
@@ -119,14 +124,14 @@ def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0)
     }
 
 def sync_transactions():
-    print("Starting exact-date sync workflow...")
+    print("Starting enhanced sync workflow...")
     purge_unwanted_records()
     
     service = get_gmail_service()
     
-    # Broad query to catch financial alerts over the past 45 days
-    query = 'newer_than:45d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=150).execute()
+    # Expanded query to ensure today's messages and recent transactions are fully retrieved
+    query = 'newer_than:60d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn OR payment)'
+    results = service.users().messages().list(userId='me', q=query, maxResults=200).execute()
     messages = results.get('messages', [])
 
     print(f"Scanning {len(messages)} messages...")
@@ -165,10 +170,10 @@ def sync_transactions():
                     "payment_mode": str(tx["payment_mode"]),
                     "type": str(tx["type"]),
                     "description": str(tx["description"]),
-                    "date": str(tx["date"]) # Explicitly mapping to the new 'date' column
+                    "date": str(tx["date"])
                 }
                 supabase.table('transactions').insert(row).execute()
-                print(f"--> LOGGED [{tx['date']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+                print(f"--> LOGGED [{tx['date']}]: ₹{tx['amount']} via {tx['payment_mode']} ({tx['type']})")
                 logged_count += 1
         except Exception as e:
             print(f"Error: {e}")
