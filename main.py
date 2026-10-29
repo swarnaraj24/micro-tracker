@@ -38,7 +38,7 @@ def parse_transaction(snippet):
 
 def sync_transactions():
     service = get_gmail_service()
-    query = 'subject:(debited OR spent OR paid OR credited OR received OR alert OR transaction) newer_than:1d'
+    query = 'subject:(debited OR spent OR paid OR credited OR received OR alert OR transaction) newer_than:30d'
     results = service.users().messages().list(userId='me', q=query).execute()
     messages = results.get('messages', [])
 
