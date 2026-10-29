@@ -118,13 +118,15 @@ def sync_transactions():
                     "type": str(tx["type"]),
                     "description": str(tx["description"])
                 }
-                supabase.table('transactions').insert(row).execute()
+                
+                # Try inserting and catch any database issues explicitly
+                res = supabase.table('transactions').insert(row).execute()
                 print(f"--> SUCCESS LOGGED [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
                 logged_count += 1
             else:
                 print(f" -> Regex/Keywords did not match snippet/body.")
         except Exception as e:
-            print(f"Skipping message due to error: {e}")
+            print(f"ERROR processing message {msg_id}: {e}")
             
     print(f"Sync complete. Successfully logged {logged_count} new transactions.")
 
