@@ -13,27 +13,28 @@ SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 def get_gmail_service():
     creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     service = build('gmail', 'v1', credentials=creds)
-    
-    # Print the exact Gmail account being accessed
     try:
         profile = service.users().getProfile(userId='me').execute()
         print(f"=== CONNECTED GMAIL ACCOUNT: {profile.get('emailAddress')} ===")
     except Exception as e:
         print(f"Could not fetch profile email: {e}")
-        
     return service
 
-def parse_transaction(snippet, subject):
-    combined_text = f"{subject} {snippet}"
+def parse_transaction(snippet, subject, body=""):
+    combined_text = f"{subject} {snippet} {body}"
     lower_text = combined_text.lower()
     
-    # Must contain a financial keyword
-    if not any(keyword in lower_text for keyword in ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn', 'upi', 'rs', 'inr']):
+    # Check for transaction keywords including ICICI specific phrasing
+    if not any(keyword in lower_text for keyword in ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn', 'upi', 'rs', 'inr', 'used for a transaction']):
         return None
 
-    # Extract amount
-    amounts = re.findall(r'(?:Rs\.?|INR|₹)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', combined_text)
+    # Extract amount (handles formats like INR 1,234.56 or ₹1234)
+    amounts = re.findall(r'(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', combined_text)
     
+    # Fallback generic numbers if currency prefix is missing
+    if not amounts:
+        amounts = re.findall(r'\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})\b', combined_text)
+
     if not amounts:
         return None
     
@@ -51,7 +52,7 @@ def parse_transaction(snippet, subject):
         
     amount = max(valid_amounts)
 
-    if 'credit card' in lower_text or 'ending' in lower_text or 'card' in lower_text:
+    if 'credit card' in lower_text or 'icici' in lower_text or 'ending' in lower_text:
         mode = 'Credit Card'
     else:
         mode = 'UPI / Debit'
@@ -68,9 +69,9 @@ def parse_transaction(snippet, subject):
 def sync_transactions():
     service = get_gmail_service()
     
-    # Broad query to catch financial alerts
-    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR UPI OR PayTM OR PhonePe OR GooglePay OR HDFC OR SBI OR ICICI OR Axis OR Bank OR Rs OR INR)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=30).execute()
+    # Broader query including ICICI bank domains and alert terms
+    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR UPI OR PayTM OR PhonePe OR GooglePay OR HDFC OR SBI OR ICICI OR Bank OR Rs OR INR OR "used for a transaction")'
+    results = service.users().messages().list(userId='me', q=query, maxResults=50).execute()
     messages = results.get('messages', [])
 
     print(f"Scanning {len(messages)} messages...")
@@ -90,15 +91,23 @@ def sync_transactions():
 
             message = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
             
-            # Extract subject header
             headers = message.get('payload', {}).get('headers', [])
             subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
-            
             snippet = message.get('snippet', '')
             
-            print(f"Checking Email Subject: {subject[:60]}")
-            
-            tx = parse_transaction(snippet, subject)
+            # Extract full body if available for deep parsing
+            body = ""
+            payload = message.get('payload', {})
+            if 'parts' in payload:
+                for part in payload['parts']:
+                    if part.get('mimeType') == 'text/plain':
+                        data = part.get('body', {}).get('data', '')
+                        if data:
+                            import base64
+                            body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
+                            break
+
+            tx = parse_transaction(snippet, subject, body)
             if tx:
                 row = {
                     "email_id": str(msg_id),
