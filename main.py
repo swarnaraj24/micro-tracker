@@ -16,7 +16,7 @@ def get_gmail_service():
     return build('gmail', 'v1', credentials=creds)
 
 def purge_unwanted_records():
-    """Removes previously logged junk/promotional entries from Supabase."""
+    """Removes junk/promotional entries from Supabase."""
     junk_patterns = [
         'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
         'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
@@ -27,6 +27,35 @@ def purge_unwanted_records():
             supabase.table('transactions').delete().ilike('description', f'%{pattern}%').execute()
         except Exception as e:
             print(f"Purge note for {pattern}: {e}")
+
+def extract_transaction_date(text, email_timestamp_ms):
+    """Attempts to find an actual transaction date inside the email text, else uses email timestamp."""
+    # Look for patterns like 28-Oct-2026, 28/10/2026, 28-10-2026
+    date_patterns = [
+        r'([0-9]{1,2})[-/]([A-Za-z]{3})[-/]([0-9]{2,4})', # 28-Oct-26 or 28/Oct/2026
+        r'([0-9]{1,2})[-/]([0-9]{1,2})[-/]([0-9]{2,4})'     # 28/10/2026
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                # Try parsing the found date string
+                matched_str = match.group(0)
+                for fmt in ('%d-%b-%Y', '%d/%b/%Y', '%d-%b-%y', '%d/%b/%y', '%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y'):
+                    try:
+                        parsed_date = datetime.datetime.strptime(matched_str, fmt)
+                        return parsed_date.strftime('%Y-%m-%d')
+                    except ValueError:
+                        continue
+            except Exception:
+                pass
+                
+    # Fallback to Gmail message internal timestamp
+    if email_timestamp_ms:
+        return datetime.datetime.fromtimestamp(int(email_timestamp_ms) / 1000.0).strftime('%Y-%m-%d')
+        
+    return datetime.datetime.now().strftime('%Y-%m-%d')
 
 def parse_transaction(snippet, subject, body="", internal_date_ms=0):
     combined_text = f"{subject} {snippet} {body}"
@@ -87,11 +116,8 @@ def parse_transaction(snippet, subject, body="", internal_date_ms=0):
     # Transaction Type
     tx_type = 'income' if any(w in lower_text for w in ['credited', 'received', 'salary', 'added', 'refund']) else 'expense'
     
-    # Extract exact email date
-    if internal_date_ms:
-        tx_date = datetime.datetime.fromtimestamp(int(internal_date_ms) / 1000.0).strftime('%Y-%m-%d')
-    else:
-        tx_date = datetime.datetime.now().strftime('%Y-%m-%d')
+    # Get accurate transaction date
+    tx_date = extract_transaction_date(combined_text, internal_date_ms)
         
     return {
         "amount": round(amount, 2),
@@ -102,14 +128,14 @@ def parse_transaction(snippet, subject, body="", internal_date_ms=0):
     }
 
 def sync_transactions():
-    print("Starting precise date-synced workflow...")
+    print("Starting exact-date sync workflow...")
     purge_unwanted_records()
     
     service = get_gmail_service()
     
-    # Scan past 30 days to catch any missing transactions
-    query = 'newer_than:30d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=100).execute()
+    # Broaden query to catch everything cleanly over the past 45 days
+    query = 'newer_than:45d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn)'
+    results = service.users().messages().list(userId='me', q=query, maxResults=150).execute()
     messages = results.get('messages', [])
 
     print(f"Scanning {len(messages)} messages...")
@@ -151,7 +177,7 @@ def sync_transactions():
                     "date": str(tx["date"])
                 }
                 supabase.table('transactions').insert(row).execute()
-                print(f"--> LOGGED [{tx['date']}] [{tx['type']}]: ₹{tx['amount']} via {tx['payment_mode']}")
+                print(f"--> LOGGED [{tx['date']}]: ₹{tx['amount']} via {tx['payment_mode']}")
                 logged_count += 1
         except Exception as e:
             print(f"Error: {e}")
