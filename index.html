@@ -207,3 +207,37 @@
 
                     const item = document.createElement('div');
                     item.className = 'transaction-item';
+                    
+                    const isIncome = tx.type === 'income';
+                    const sign = isIncome ? '+' : '-';
+                    const amountClass = isIncome ? 'income' : 'expense';
+
+                    item.innerHTML = `
+                        <div class="tx-info">
+                            <span class="tx-desc">${escapeHtml(tx.description || 'Bank Transaction')}</span>
+                            <span class="tx-date">${tx.date} • ${tx.payment_mode || 'UPI'}</span>
+                        </div>
+                        <span class="tx-amount ${amountClass}">${sign}₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                    `;
+                    listContainer.appendChild(item);
+                });
+
+                document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+                document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+
+            } catch (err) {
+                console.error('Unexpected error:', err);
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        // Load data on page open
+        loadDashboardData();
+    </script>
+</body>
+</html>
