@@ -1,0 +1,164 @@
+:root {
+    --bg-color: #0f172a;
+    --card-bg: rgba(30, 41, 59, 0.7);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-income: #10b981;
+    --accent-expense: #ef4444;
+    --glow-income: rgba(16, 185, 129, 0.15);
+    --glow-expense: rgba(239, 68, 68, 0.15);
+    --border-color: rgba(255, 255, 255, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow-x: hidden;
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+}
+
+.dashboard-container {
+    width: 100%;
+    max-width: 900px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* 3D Animated Stat Cards */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    perspective: 1000px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    backdrop-filter: blur(12px);
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+    transform-style: preserve-3d;
+    cursor: pointer;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.stat-card:hover {
+    transform: translateY(-6px) rotateX(4deg) rotateY(-4deg);
+}
+
+.stat-card.income:hover {
+    box-shadow: 0 20px 40px -15px var(--glow-income), 0 0 20px rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.stat-card.expense:hover {
+    box-shadow: 0 20px 40px -15px var(--glow-expense), 0 0 20px rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.stat-title {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.stat-amount {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.stat-card.income .stat-amount { color: var(--accent-income); }
+.stat-card.expense .stat-amount { color: var(--accent-expense); }
+
+/* Transactions Table / List Container */
+.transactions-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.5rem;
+    backdrop-filter: blur(12px);
+}
+
+.transactions-section h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+}
+
+.transaction-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.transaction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.4);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.transaction-item:hover {
+    background: rgba(30, 41, 59, 0.9);
+    transform: scale(1.01);
+}
+
+.tx-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.tx-desc {
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.tx-date {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.tx-amount {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.tx-amount.income { color: var(--accent-income); }
+.tx-amount.expense { color: var(--accent-expense); }
