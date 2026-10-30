@@ -217,9 +217,12 @@
             if (lower.includes('ola')) return 'Ola Cab';
             if (lower.includes('amazon')) return 'Amazon Shopping';
             if (lower.includes('flipkart')) return 'Flipkart Order';
-            if (lower.includes('salary') || lower.includes('credited')) return 'Salary / Funds Credited';
             
-            // Clean up generic SMS boilerplate if present
+            // Only flag as salary/funds credited if it genuinely is an incoming deposit and NOT an expense
+            if ((lower.includes('salary') || lower.includes('credited')) && !lower.includes('debited') && !lower.includes('spent') && !lower.includes('paid')) {
+                return 'Salary / Funds Credited';
+            }
+            
             let cleaned = rawText.replace(/^(Alert|Notification|Txn|Transaction|Info|You have done a UPI txn\. Check details!):\s*/i, '');
             if (cleaned.length < 5 || cleaned.includes('Check details')) {
                 return 'UPI / Bank Transfer';
@@ -227,13 +230,13 @@
             return cleaned.length > 40 ? cleaned.substring(0, 37) + '...' : cleaned;
         }
 
-        function autoCategorize(text) {
+        function autoCategorize(text, isIncome) {
+            if (isIncome) return 'Income';
             const lower = text.toLowerCase();
             if (lower.includes('swiggy') || lower.includes('zomato') || lower.includes('food')) return 'Food';
             if (lower.includes('uber') || lower.includes('ola') || lower.includes('metro')) return 'Travel';
             if (lower.includes('amazon') || lower.includes('flipkart')) return 'Shopping';
             if (lower.includes('electricity') || lower.includes('bill') || lower.includes('recharge')) return 'Utilities';
-            if (lower.includes('salary') || lower.includes('credited') || lower.includes('received')) return 'Income';
             return 'General';
         }
 
@@ -262,8 +265,8 @@
                 const amount = Number(tx.amount);
                 const rawLower = (tx.description || '').toLowerCase();
                 
-                // FORCE CORRECT TYPE: If description says debited/spent or amount is negative or type isn't explicitly income, treat as expense
-                let isIncome = tx.type === 'income' || rawLower.includes('credited') || rawLower.includes('received') || rawLower.includes('deposited');
+                // Strict check: if it mentions debited/spent/paid or was logged as expense, treat as expense
+                let isIncome = tx.type === 'income' || (rawLower.includes('credited') && !rawLower.includes('debited') && !rawLower.includes('spent') && !rawLower.includes('paid'));
                 if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) {
                     isIncome = false;
                 }
@@ -274,7 +277,7 @@
                 else totalExpense += amount;
 
                 const cleanDesc = cleanDescription(tx.description);
-                const category = autoCategorize(tx.description || '');
+                const category = autoCategorize(tx.description || '', isIncome);
                 const tr = document.createElement('tr');
                 const sign = computedType === 'income' ? '+' : '-';
                 const amountClass = computedType === 'income' ? 'income' : 'expense';
@@ -302,7 +305,7 @@
 
             const filtered = allTransactions.filter(tx => {
                 const rawLower = (tx.description || '').toLowerCase();
-                let isIncome = tx.type === 'income' || rawLower.includes('credited') || rawLower.includes('received');
+                let isIncome = tx.type === 'income' || (rawLower.includes('credited') && !rawLower.includes('debited') && !rawLower.includes('spent') && !rawLower.includes('paid'));
                 if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) isIncome = false;
                 const tName = isIncome ? 'income' : 'expense';
 
