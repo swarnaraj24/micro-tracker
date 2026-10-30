@@ -4,10 +4,133 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transaction Intelligence</title>
-    <!-- External Stylesheet link -->
-    <link rel="stylesheet" href="style.css">
-    <!-- Supabase JS Client -->
+    <!-- Supabase JS Client & Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: #080c14;
+            color: #ffffff;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(16px);
+        }
+
+        .stat-title {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .stat-amount {
+            font-size: 2.25rem;
+            font-weight: 800;
+        }
+
+        .stat-amount.income { color: #10b981; }
+        .stat-amount.expense { color: #ef4444; }
+
+        .table-section {
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(16px);
+        }
+
+        .table-section h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            background: rgba(11, 15, 20, 0.8);
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        td {
+            padding: 14px 16px;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: #f3f4f6;
+        }
+
+        tr:hover td { background: rgba(30, 41, 59, 0.5); }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 6px;
+        }
+
+        .badge.expense { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .badge.income { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .badge.category { background: rgba(59, 130, 246, 0.15); color: #3b82f6; margin-left: 6px; }
+
+        .truncate-desc {
+            max-width: 350px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .amount-text.income { color: #10b981; font-weight: 700; }
+        .amount-text.expense { color: #ef4444; font-weight: 700; }
+    </style>
 </head>
 <body>
 
@@ -16,43 +139,38 @@
             <h1>Transaction Intelligence</h1>
         </header>
 
-        <!-- 3D Animated Stat Cards -->
+        <!-- Stat Cards -->
         <div class="stats-grid">
-            <div class="stat-card income-card">
+            <div class="stat-card">
                 <div class="stat-title">Total Received (Income)</div>
                 <div class="stat-amount income" id="total-income">₹0.00</div>
             </div>
-            <div class="stat-card expense-card">
+            <div class="stat-card">
                 <div class="stat-title">Total Spent (Expense)</div>
                 <div class="stat-amount expense" id="total-expense">₹0.00</div>
             </div>
         </div>
 
-        <!-- Ledger History Table -->
+        <!-- Ledger Table -->
         <div class="table-section">
             <h2>Ledger History</h2>
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th>Payment Mode</th>
-                            <th>Type</th>
-                            <th style="text-align: right;">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transaction-table-body">
-                        <tr>
-                            <td colspan="5" style="text-align: center; color: #94a3b8; padding: 30px;">Loading database records...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Description & Category</th>
+                        <th>Mode</th>
+                        <th>Type</th>
+                        <th style="text-align: right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="transaction-table-body">
+                    <tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Loading database records...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Data Rendering & Supabase Integration Script -->
     <script>
         const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkD6R_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
@@ -60,66 +178,83 @@
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        async function loadDashboardData() {
-            try {
-                const { data, error } = await _supabase
-                    .from('transactions')
-                    .select('*')
-                    .order('date', { ascending: false });
+        // Function to make raw descriptions meaningful and short on the fly
+        function makeMeaningfulDescription(rawText) {
+            if (!rawText) return 'Bank Transaction';
+            const lower = rawText.toLowerCase();
 
-                if (error) {
-                    console.error('Supabase error:', error);
-                    return;
-                }
+            // Look for known merchants or patterns
+            if (lower.includes('swiggy')) return 'Swiggy Food Delivery';
+            if (lower.includes('zomato')) return 'Zomato Order';
+            if (lower.includes('uber')) return 'Uber Ride';
+            if (lower.includes('ola')) return 'Ola Cab';
+            if (lower.includes('amazon')) return 'Amazon Shopping';
+            if (lower.includes('flipkart')) return 'Flipkart Purchase';
+            if (lower.includes('salary')) return 'Monthly Salary Credit';
 
-                let totalIncome = 0;
-                let totalExpense = 0;
-                const tbody = document.getElementById('transaction-table-body');
-                tbody.innerHTML = '';
-
-                if (!data || data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 30px;">No transaction records found</td></tr>';
-                    return;
-                }
-
-                data.forEach((tx, index) => {
-                    const amount = Number(tx.amount);
-                    const isIncome = tx.type === 'income';
-
-                    if (isIncome) {
-                        totalIncome += amount;
-                    } else if (tx.type === 'expense') {
-                        totalExpense += amount;
-                    }
-
-                    const tr = document.createElement('tr');
-                    tr.style.animationDelay = `${index * 0.03}s`;
-
-                    const sign = isIncome ? '+' : '-';
-                    const amountClass = isIncome ? 'income' : 'expense';
-
-                    tr.innerHTML = `
-                        <td>${tx.date || '--'}</td>
-                        <td style="max-width: 400px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(tx.description || '')}">${escapeHtml(tx.description || 'Bank Transaction')}</td>
-                        <td>${tx.payment_mode || 'UPI'}</td>
-                        <td><span class="badge ${tx.type}">${tx.type.toUpperCase()}</span></td>
-                        <td style="text-align: right;" class="amount-text ${amountClass}">${sign}₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-                document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-                document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-
-            } catch (err) {
-                console.error('Unexpected error loading data:', err);
+            // Clean up common bank subject prefixes
+            let cleaned = rawText.replace(/^(Alert|Notification|Txn|Transaction|Info):\s*/i, '');
+            if (cleaned.length > 45) {
+                cleaned = cleaned.substring(0, 42) + '...';
             }
+            return cleaned;
+        }
+
+        function autoCategorize(text) {
+            const lower = text.toLowerCase();
+            if (lower.includes('swiggy') || lower.includes('zomato') || lower.includes('food')) return 'Food';
+            if (lower.includes('uber') || lower.includes('ola') || lower.includes('metro')) return 'Travel';
+            if (lower.includes('amazon') || lower.includes('flipkart')) return 'Shopping';
+            if (lower.includes('electricity') || lower.includes('bill') || lower.includes('recharge')) return 'Utilities';
+            if (lower.includes('salary') || lower.includes('credited')) return 'Income';
+            return 'General';
+        }
+
+        async function loadDashboardData() {
+            const { data, error } = await _supabase.from('transactions').select('*').order('date', { ascending: false });
+            if (error) { console.error(error); return; }
+
+            let totalIncome = 0;
+            let totalExpense = 0;
+            const tbody = document.getElementById('transaction-table-body');
+            tbody.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No records found</td></tr>';
+                return;
+            }
+
+            data.forEach(tx => {
+                const amount = Number(tx.amount);
+                const isIncome = tx.type === 'income';
+                if (isIncome) totalIncome += amount;
+                else if (tx.type === 'expense') totalExpense += amount;
+
+                const cleanDesc = makeMeaningfulDescription(tx.description);
+                const category = autoCategorize(tx.description || '');
+                const tr = document.createElement('tr');
+                const sign = isIncome ? '+' : '-';
+                const amountClass = isIncome ? 'income' : 'expense';
+
+                tr.innerHTML = `
+                    <td>${tx.date || '--'}</td>
+                    <td class="truncate-desc" title="${escapeHtml(tx.description || '')}">
+                        ${escapeHtml(cleanDesc)}
+                        <span class="badge category">${category}</span>
+                    </td>
+                    <td>${tx.payment_mode || 'UPI'}</td>
+                    <td><span class="badge ${tx.type}">${tx.type.toUpperCase()}</span></td>
+                    <td style="text-align: right;" class="amount-text ${amountClass}">${sign}₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+            document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
         }
 
         function escapeHtml(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-            );
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
         }
 
         loadDashboardData();
