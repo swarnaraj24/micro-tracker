@@ -28,7 +28,7 @@ def get_gmail_service():
             token.write(creds.to_json())
     return build('gmail', 'v1', credentials=creds)
 
-def parse_transaction_email(snippet):
+def parse_transaction_email(msg_id, snippet):
     # Regex pattern to capture amount (handles INR, Rs., ₹ and numbers with commas/decimals)
     amount_match = re.search(r'(?i)(?:rs\.?|inr|₹)\s*([0-9,]+\.?[0-9]*)', snippet)
     if not amount_match:
@@ -44,7 +44,7 @@ def parse_transaction_email(snippet):
     tx_type = "expense" if re.search(r'(?i)debited|spent|paid', snippet) else "income"
 
     return {
-        "email_id": "email_parser",
+        "email_id": msg_id,  # Unique Gmail message ID to prevent duplicate constraint errors
         "amount": amount,
         "payment_mode": "UPI",
         "type": tx_type,
@@ -59,14 +59,14 @@ def push_to_supabase(data):
 def main():
     service = get_gmail_service()
     
-    # Query for bank emails starting from Nov 1, 2026 (after:2026/10/31 is inclusive of Nov 1)
+    # Query for bank emails starting from Sep 30, 2026 onwards
     query = 'from:(hdfc OR icici) after:2026/09/30'
     
     results = service.users().messages().list(userId='me', q=query).execute()
     messages = results.get('messages', [])
 
     if not messages:
-        print("No transactions found from Nov 1 onwards.")
+        print("No transactions found matching the query.")
         return
 
     print(f"Found {len(messages)} messages to process.")
@@ -75,10 +75,13 @@ def main():
         msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
         snippet = msg_data.get('snippet', '')
         
-        parsed_data = parse_transaction_email(snippet)
+        parsed_data = parse_transaction_email(msg['id'], snippet)
         if parsed_data:
-            response = push_to_supabase(parsed_data)
-            print(f"Pushed transaction Rs. {parsed_data['amount']} -> Supabase Success")
+            try:
+                push_to_supabase(parsed_data)
+                print(f"Pushed transaction Rs. {parsed_data['amount']} -> Supabase Success")
+            except Exception as e:
+                print(f"Skipping or failed for message ID {msg['id']}: {e}")
 
 if __name__ == '__main__':
     main()
