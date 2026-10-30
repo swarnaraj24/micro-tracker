@@ -207,7 +207,7 @@
 
         let allTransactions = [];
 
-        // Spam & Marketing Blocklist Check
+        // Strict Spam & Marketing Blocklist Check
         function isJunkOrSpam(text) {
             if (!text) return false;
             const lower = text.toLowerCase();
@@ -331,7 +331,7 @@
         }
 
         function escapeHtml(str) {
-            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] => tag));
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
         }
 
         loadDashboardData();
