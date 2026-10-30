@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction Intelligence</title>
+    <title>Transaction Intelligence Pro</title>
     <!-- Supabase JS Client & Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -28,14 +28,39 @@
             max-width: 1100px;
         }
 
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
         header h1 {
             font-size: 2rem;
             font-weight: 800;
-            margin-bottom: 24px;
             background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
+        .controls-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .controls-bar input, .controls-bar select {
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            backdrop-filter: blur(16px);
+        }
+
+        .controls-bar input { flex: 1; }
 
         .stats-grid {
             display: grid;
@@ -75,13 +100,6 @@
             border-radius: 16px;
             padding: 24px;
             backdrop-filter: blur(16px);
-        }
-
-        .table-section h2 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #94a3b8;
-            margin-bottom: 16px;
         }
 
         table {
@@ -139,6 +157,16 @@
             <h1>Transaction Intelligence</h1>
         </header>
 
+        <!-- Search & Filter Controls Bar -->
+        <div class="controls-bar">
+            <input type="text" id="searchInput" placeholder="Search merchant or description..." oninput="filterTable()">
+            <select id="typeFilter" onchange="filterTable()">
+                <option value="all">All Types</option>
+                <option value="expense">Expenses Only</option>
+                <option value="income">Income Only</option>
+            </select>
+        </div>
+
         <!-- Stat Cards -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -153,7 +181,6 @@
 
         <!-- Ledger Table -->
         <div class="table-section">
-            <h2>Ledger History</h2>
             <table>
                 <thead>
                     <tr>
@@ -178,26 +205,26 @@
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // Function to make raw descriptions meaningful and short on the fly
-        function makeMeaningfulDescription(rawText) {
+        let allTransactions = [];
+
+        function cleanDescription(rawText) {
             if (!rawText) return 'Bank Transaction';
             const lower = rawText.toLowerCase();
 
-            // Look for known merchants or patterns
-            if (lower.includes('swiggy')) return 'Swiggy Food Delivery';
+            if (lower.includes('swiggy')) return 'Swiggy Food Order';
             if (lower.includes('zomato')) return 'Zomato Order';
             if (lower.includes('uber')) return 'Uber Ride';
             if (lower.includes('ola')) return 'Ola Cab';
             if (lower.includes('amazon')) return 'Amazon Shopping';
-            if (lower.includes('flipkart')) return 'Flipkart Purchase';
-            if (lower.includes('salary')) return 'Monthly Salary Credit';
-
-            // Clean up common bank subject prefixes
-            let cleaned = rawText.replace(/^(Alert|Notification|Txn|Transaction|Info):\s*/i, '');
-            if (cleaned.length > 45) {
-                cleaned = cleaned.substring(0, 42) + '...';
+            if (lower.includes('flipkart')) return 'Flipkart Order';
+            if (lower.includes('salary') || lower.includes('credited')) return 'Salary / Funds Credited';
+            
+            // Clean up generic SMS boilerplate if present
+            let cleaned = rawText.replace(/^(Alert|Notification|Txn|Transaction|Info|You have done a UPI txn\. Check details!):\s*/i, '');
+            if (cleaned.length < 5 || cleaned.includes('Check details')) {
+                return 'UPI / Bank Transfer';
             }
-            return cleaned;
+            return cleaned.length > 40 ? cleaned.substring(0, 37) + '...' : cleaned;
         }
 
         function autoCategorize(text) {
@@ -206,7 +233,7 @@
             if (lower.includes('uber') || lower.includes('ola') || lower.includes('metro')) return 'Travel';
             if (lower.includes('amazon') || lower.includes('flipkart')) return 'Shopping';
             if (lower.includes('electricity') || lower.includes('bill') || lower.includes('recharge')) return 'Utilities';
-            if (lower.includes('salary') || lower.includes('credited')) return 'Income';
+            if (lower.includes('salary') || lower.includes('credited') || lower.includes('received')) return 'Income';
             return 'General';
         }
 
@@ -214,6 +241,11 @@
             const { data, error } = await _supabase.from('transactions').select('*').order('date', { ascending: false });
             if (error) { console.error(error); return; }
 
+            allTransactions = data || [];
+            renderTable(allTransactions);
+        }
+
+        function renderTable(data) {
             let totalIncome = 0;
             let totalExpense = 0;
             const tbody = document.getElementById('transaction-table-body');
@@ -221,20 +253,31 @@
 
             if (!data || data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No records found</td></tr>';
+                document.getElementById('total-income').innerText = '₹0.00';
+                document.getElementById('total-expense').innerText = '₹0.00';
                 return;
             }
 
             data.forEach(tx => {
                 const amount = Number(tx.amount);
-                const isIncome = tx.type === 'income';
-                if (isIncome) totalIncome += amount;
-                else if (tx.type === 'expense') totalExpense += amount;
+                const rawLower = (tx.description || '').toLowerCase();
+                
+                // FORCE CORRECT TYPE: If description says debited/spent or amount is negative or type isn't explicitly income, treat as expense
+                let isIncome = tx.type === 'income' || rawLower.includes('credited') || rawLower.includes('received') || rawLower.includes('deposited');
+                if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) {
+                    isIncome = false;
+                }
 
-                const cleanDesc = makeMeaningfulDescription(tx.description);
+                const computedType = isIncome ? 'income' : 'expense';
+
+                if (computedType === 'income') totalIncome += amount;
+                else totalExpense += amount;
+
+                const cleanDesc = cleanDescription(tx.description);
                 const category = autoCategorize(tx.description || '');
                 const tr = document.createElement('tr');
-                const sign = isIncome ? '+' : '-';
-                const amountClass = isIncome ? 'income' : 'expense';
+                const sign = computedType === 'income' ? '+' : '-';
+                const amountClass = computedType === 'income' ? 'income' : 'expense';
 
                 tr.innerHTML = `
                     <td>${tx.date || '--'}</td>
@@ -243,7 +286,7 @@
                         <span class="badge category">${category}</span>
                     </td>
                     <td>${tx.payment_mode || 'UPI'}</td>
-                    <td><span class="badge ${tx.type}">${tx.type.toUpperCase()}</span></td>
+                    <td><span class="badge ${computedType}">${computedType.toUpperCase()}</span></td>
                     <td style="text-align: right;" class="amount-text ${amountClass}">${sign}₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                 `;
                 tbody.appendChild(tr);
@@ -251,6 +294,25 @@
 
             document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
             document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+        }
+
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const typeVal = document.getElementById('typeFilter').value;
+
+            const filtered = allTransactions.filter(tx => {
+                const rawLower = (tx.description || '').toLowerCase();
+                let isIncome = tx.type === 'income' || rawLower.includes('credited') || rawLower.includes('received');
+                if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) isIncome = false;
+                const tName = isIncome ? 'income' : 'expense';
+
+                const matchesSearch = (tx.description || '').toLowerCase().includes(query) || (tx.payment_mode || '').toLowerCase().includes(query);
+                const matchesType = typeVal === 'all' || tName === typeVal;
+
+                return matchesSearch && matchesType;
+            });
+
+            renderTable(filtered);
         }
 
         function escapeHtml(str) {
