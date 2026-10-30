@@ -60,7 +60,7 @@ def main():
     service = get_gmail_service()
     
     # Query for bank emails starting from Nov 1, 2026 (after:2026/10/31 is inclusive of Nov 1)
-    query = 'from:(hdfc OR icici) after:2026/10/31'
+    query = 'from:(hdfc OR icici) after:2026/09/30'
     
     results = service.users().messages().list(userId='me', q=query).execute()
     messages = results.get('messages', [])
