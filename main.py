@@ -1,17 +1,16 @@
 import os
 import re
+from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from supabase import create_client, Client
 
-# Supabase Configuration using environment variables
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 def get_gmail_service():
@@ -28,8 +27,8 @@ def get_gmail_service():
             token.write(creds.to_json())
     return build('gmail', 'v1', credentials=creds)
 
-def parse_transaction_email(msg_id, snippet):
-    # Regex pattern to capture amount (handles INR, Rs., ₹ and numbers with commas/decimals)
+def parse_transaction_email(msg_id, internal_date_ms, snippet):
+    # Flexible regex to catch amounts following Rs, INR, or ₹
     amount_match = re.search(r'(?i)(?:rs\.?|inr|₹)\s*([0-9,]+\.?[0-9]*)', snippet)
     if not amount_match:
         return None
@@ -40,16 +39,18 @@ def parse_transaction_email(msg_id, snippet):
     except ValueError:
         return None
 
-    # Determine transaction type
     tx_type = "expense" if re.search(r'(?i)debited|spent|paid', snippet) else "income"
 
+    # Convert Gmail's millisecond timestamp into a real YYYY-MM-DD date string
+    tx_date = datetime.fromtimestamp(int(internal_date_ms) / 1000.0).strftime('%Y-%m-%d')
+
     return {
-        "email_id": msg_id,  # Unique Gmail message ID to prevent duplicate constraint errors
+        "email_id": msg_id,
         "amount": amount,
         "payment_mode": "UPI",
         "type": tx_type,
-        "description": snippet[:100],  # Short snippet preview as description
-        "date": "2026-11-01"           # Adjust to dynamically parse email date if needed
+        "description": snippet[:100],
+        "date": tx_date  # Actual transaction date extracted from email metadata
     }
 
 def push_to_supabase(data):
@@ -72,16 +73,18 @@ def main():
     print(f"Found {len(messages)} messages to process.")
 
     for msg in messages:
+        # Fetch full message including internalDate
         msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
         snippet = msg_data.get('snippet', '')
+        internal_date = msg_data.get('internalDate', '')
         
-        parsed_data = parse_transaction_email(msg['id'], snippet)
+        parsed_data = parse_transaction_email(msg['id'], internal_date, snippet)
         if parsed_data:
             try:
                 push_to_supabase(parsed_data)
-                print(f"Pushed transaction Rs. {parsed_data['amount']} -> Supabase Success")
+                print(f"Pushed transaction Rs. {parsed_data['amount']} on {parsed_data['date']} -> Supabase Success")
             except Exception as e:
-                print(f"Skipping or failed for message ID {msg['id']}: {e}")
+                print(f"Skipping message ID {msg['id']} (likely duplicate): {e}")
 
 if __name__ == '__main__':
     main()
