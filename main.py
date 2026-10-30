@@ -1,5 +1,6 @@
 import os
 import re
+import base64
 from datetime import datetime
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -7,10 +8,12 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from supabase import create_client, Client
 
+# Supabase Configuration using environment variables
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 def get_gmail_service():
@@ -70,7 +73,7 @@ def parse_transaction_email(msg_id, internal_date_ms, subject, body_text):
         "amount": amount,
         "payment_mode": payment_mode,
         "type": tx_type,
-        "description": body_text.strip()[:150],  # Capture clean preview of full body
+        "description": body_text.strip()[:150],
         "date": tx_date
     }
 
@@ -94,14 +97,12 @@ def main():
     print(f"Found {len(messages)} messages to process.")
 
     for msg in messages:
-        # Fetch full raw content to parse plaintext body
         msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
         internal_date = msg_data.get('internalDate', '')
         
         headers = msg_data.get('payload', {}).get('headers', [])
         subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
         
-        # Extract full plain text body recursively from message parts
         body_text = ""
         payload = msg_data.get('payload', {})
         if 'body' in payload and 'data' in payload['body']:
@@ -112,7 +113,6 @@ def main():
                     body_text = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
                     break
         
-        # Fallback to snippet if body extraction is empty
         if not body_text:
             body_text = msg_data.get('snippet', '')
 
