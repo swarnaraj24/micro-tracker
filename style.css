@@ -1,164 +1,201 @@
 :root {
-    --bg-color: #0f172a;
-    --card-bg: rgba(30, 41, 59, 0.7);
+    --bg-color: #080c14;
+    --card-bg: rgba(17, 24, 39, 0.7);
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --accent-income: #10b981;
     --accent-expense: #ef4444;
-    --glow-income: rgba(16, 185, 129, 0.15);
-    --glow-expense: rgba(239, 68, 68, 0.15);
     --border-color: rgba(255, 255, 255, 0.08);
+    --glow-income: rgba(16, 185, 129, 0.2);
+    --glow-expense: rgba(239, 68, 68, 0.2);
 }
 
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
     background-color: var(--bg-color);
     color: var(--text-primary);
     min-height: 100vh;
+    padding: 40px 20px;
     display: flex;
     justify-content: center;
-    align-items: center;
     overflow-x: hidden;
     background-image: 
-        radial-gradient(circle at 10% 20%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+        radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.07) 0%, transparent 40%);
 }
 
-.dashboard-container {
+.container {
     width: 100%;
-    max-width: 900px;
-    padding: 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
+    max-width: 1100px;
+    animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 header h1 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    letter-spacing: -0.03em;
 }
 
 /* 3D Animated Stat Cards */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+    margin-bottom: 35px;
     perspective: 1000px;
 }
 
 .stat-card {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 1.5rem;
-    backdrop-filter: blur(12px);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+    border-radius: 20px;
+    padding: 28px;
+    backdrop-filter: blur(16px);
     transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+    box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.5);
     cursor: pointer;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
 .stat-card:hover {
-    transform: translateY(-6px) rotateX(4deg) rotateY(-4deg);
+    transform: translateY(-8px) rotateX(4deg) rotateY(-4deg);
 }
 
-.stat-card.income:hover {
-    box-shadow: 0 20px 40px -15px var(--glow-income), 0 0 20px rgba(16, 185, 129, 0.1);
-    border-color: rgba(16, 185, 129, 0.3);
+.stat-card.income-card:hover {
+    box-shadow: 0 25px 50px -12px var(--glow-income), 0 0 30px rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
 }
 
-.stat-card.expense:hover {
-    box-shadow: 0 20px 40px -15px var(--glow-expense), 0 0 20px rgba(239, 68, 68, 0.1);
-    border-color: rgba(239, 68, 68, 0.3);
+.stat-card.expense-card:hover {
+    box-shadow: 0 25px 50px -12px var(--glow-expense), 0 0 30px rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
 }
 
 .stat-title {
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+    font-weight: 700;
 }
 
 .stat-amount {
-    font-size: 2rem;
-    font-weight: 700;
+    font-size: 2.5rem;
+    font-weight: 800;
     letter-spacing: -0.02em;
 }
 
-.stat-card.income .stat-amount { color: var(--accent-income); }
-.stat-card.expense .stat-amount { color: var(--accent-expense); }
+.stat-amount.income { color: var(--accent-income); }
+.stat-amount.expense { color: var(--accent-expense); }
 
-/* Transactions Table / List Container */
-.transactions-section {
+/* Table Container with Smooth Glassmorphism */
+.table-section {
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 1.5rem;
-    backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 28px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+    animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.transactions-section h2 {
-    font-size: 1.1rem;
+.table-section h2 {
+    font-size: 1.2rem;
     font-weight: 600;
-    margin-bottom: 1rem;
     color: var(--text-secondary);
+    margin-bottom: 20px;
 }
 
-.transaction-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    max-height: 380px;
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    max-height: 500px;
     overflow-y: auto;
 }
 
-.transaction-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    background: rgba(15, 23, 42, 0.4);
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    transition: background 0.2s ease, transform 0.2s ease;
+.table-responsive::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
 }
 
-.transaction-item:hover {
-    background: rgba(30, 41, 59, 0.9);
-    transform: scale(1.01);
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
 }
 
-.tx-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.tx-desc {
-    font-weight: 500;
-    font-size: 0.95rem;
-}
-
-.tx-date {
+th {
     font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
     color: var(--text-secondary);
+    background: rgba(11, 15, 20, 0.8);
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.tx-amount {
-    font-weight: 600;
-    font-size: 1rem;
+td {
+    padding: 16px 18px;
+    font-size: 0.95rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: #f3f4f6;
+    animation: rowAppear 0.5s ease forwards;
 }
 
-.tx-amount.income { color: var(--accent-income); }
-.tx-amount.expense { color: var(--accent-expense); }
+tr {
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+tr:hover td {
+    background: rgba(30, 41, 59, 0.6);
+}
+
+.badge {
+    display: inline-block;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 8px;
+    letter-spacing: 0.03em;
+}
+
+.badge.expense { background: rgba(239, 68, 68, 0.15); color: var(--accent-expense); }
+.badge.income { background: rgba(16, 185, 129, 0.15); color: var(--accent-income); }
+.badge.bill_payment { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+
+.amount-text.income { color: var(--accent-income); font-weight: 700; }
+.amount-text.expense { color: var(--accent-expense); font-weight: 700; }
+
+/* Flow & Entry Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes rowAppear {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
