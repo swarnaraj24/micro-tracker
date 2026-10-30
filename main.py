@@ -1,176 +1,84 @@
 import os
 import re
-import datetime
-import email.utils
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from supabase import create_client, Client
 
+# Supabase Configuration using environment variables
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Gmail API Scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
 def get_gmail_service():
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
     return build('gmail', 'v1', credentials=creds)
 
-def purge_unwanted_records():
-    junk_patterns = [
-        'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 
-        'cashback', 'upgrade', 'pre-approved', 'karwa chauth', 'diwali', 
-        'bonus', 'smartemi', 'registration', 'welcome', 'save up to', 
-        'awkward', 'friend', 'profile', 'connection', 'reminder'
-    ]
-    for pattern in junk_patterns:
-        try:
-            supabase.table('transactions').delete().ilike('description', f'%{pattern}%').execute()
-        except Exception as e:
-            print(f"Purge note for {pattern}: {e}")
-
-def extract_transaction_date(message_headers, email_timestamp_ms):
-    for header in message_headers:
-        if header.get('name', '').lower() == 'date':
-            date_str = header.get('value', '')
-            try:
-                parsed_tuple = email.utils.parsedate_tz(date_str)
-                if parsed_tuple:
-                    timestamp = email.utils.mktime_tz(parsed_tuple)
-                    return datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d')
-            except Exception:
-                pass
-                
-    if email_timestamp_ms:
-        return datetime.datetime.fromtimestamp(int(email_timestamp_ms) / 1000.0).strftime('%Y-%m-%d')
-        
-    return datetime.datetime.now().strftime('%Y-%m-%d')
-
-def parse_transaction(snippet, subject, body="", headers=[], internal_date_ms=0):
-    combined_text = f"{subject} {snippet} {body}"
-    lower_text = combined_text.lower()
-    
-    blocklist = [
-        'offer', 'limit', 'loan', 'policy', 'gtt', 'cuspa', 'reward', 'cashback', 
-        'upgrade', 'pre-approved', 'diwali', 'karwa chauth', 'bonus', 
-        'smartemi', 'registration', 'welcome', 'save up to', 'health benefits', 
-        'interest rate starts', 'car loan', 'awkward', 'profile', 'connection'
-    ]
-    if any(b in lower_text for b in blocklist):
-        return None
-
-    action_keywords = ['debited', 'spent', 'paid', 'credited', 'received', 'sent', 'transferred', 'txn']
-    if not any(act in lower_text for act in action_keywords):
-        return None
-
-    amounts = re.findall(r'(?:Rs\.?|INR|₹)\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)', combined_text)
-    if not amounts:
-        amounts = re.findall(r'\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})\b', combined_text)
-
-    if not amounts:
+def parse_transaction_email(snippet):
+    # Regex pattern to capture amount (handles INR, Rs., ₹ and numbers with commas/decimals)
+    amount_match = re.search(r'(?i)(?:rs\.?|inr|₹)\s*([0-9,]+\.?[0-9]*)', snippet)
+    if not amount_match:
         return None
     
-    valid_amounts = []
-    for a in amounts:
-        try:
-            val = float(a.replace(',', ''))
-            if val > 0:
-                valid_amounts.append(val)
-        except ValueError:
-            continue
-            
-    if not valid_amounts:
-        return None
-        
-    amount = max(valid_amounts)
-
-    if amount > 200000 and 'salary' not in lower_text:
+    amount_str = amount_match.group(1).replace(',', '')
+    try:
+        amount = float(amount_str)
+    except ValueError:
         return None
 
-    is_cc_payment = ('payment received on your' in lower_text and 'credit card' in lower_text) or 'card payment' in lower_text
+    # Determine transaction type
+    tx_type = "expense" if re.search(r'(?i)debited|spent|paid', snippet) else "income"
 
-    if 'icici' in lower_text:
-        mode = 'ICICI Bank'
-    elif 'hdfc' in lower_text:
-        mode = 'HDFC Bank'
-    elif 'rupay' in lower_text:
-        mode = 'RuPay Credit Card'
-    elif 'upi' in lower_text or 'vpa' in lower_text or '@' in lower_text:
-        mode = 'UPI'
-    else:
-        mode = 'UPI / Card'
-        
-    if is_cc_payment:
-        tx_type = 'bill_payment'
-        mode = 'CC Bill Payment'
-    else:
-        tx_type = 'income' if any(w in lower_text for w in ['credited', 'salary', 'refund']) and 'credit card' not in lower_text else 'expense'
-    
-    tx_date = extract_transaction_date(headers, internal_date_ms)
-        
     return {
-        "amount": round(amount, 2),
-        "payment_mode": mode,
+        "email_id": "email_parser",
+        "amount": amount,
+        "payment_mode": "UPI",
         "type": tx_type,
-        "description": str(subject[:100]),
-        "date": tx_date
+        "description": snippet[:100],  # Short snippet preview as description
+        "date": "2026-11-01"           # Adjust to dynamically parse email date if needed
     }
 
-def sync_transactions():
-    print("Starting hardened sync workflow...")
-    purge_unwanted_records()
-    
+def push_to_supabase(data):
+    response = supabase.table("transactions").insert(data).execute()
+    return response
+
+def main():
     service = get_gmail_service()
     
-    query = 'newer_than:60d (debited OR spent OR paid OR credited OR received OR UPI OR ICICI OR HDFC OR txn OR payment)'
-    results = service.users().messages().list(userId='me', q=query, maxResults=200).execute()
+    # Query for bank emails starting from Nov 1, 2026 (after:2026/10/31 is inclusive of Nov 1)
+    query = 'from:(hdfc OR icici) after:2026/10/31'
+    
+    results = service.users().messages().list(userId='me', q=query).execute()
     messages = results.get('messages', [])
 
-    print(f"Scanning {len(messages)} messages...")
-    logged_count = 0
+    if not messages:
+        print("No transactions found from Nov 1 onwards.")
+        return
+
+    print(f"Found {len(messages)} messages to process.")
 
     for msg in messages:
-        msg_id = msg['id']
-        try:
-            existing = supabase.table('transactions').select('id').eq('email_id', msg_id).execute()
-            if existing.data:
-                continue
-
-            message = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
-            internal_date_ms = message.get('internalDate', 0)
-            
-            headers = message.get('payload', {}).get('headers', [])
-            subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
-            snippet = message.get('snippet', '')
-            
-            body = ""
-            payload = message.get('payload', {})
-            if 'parts' in payload:
-                for part in payload['parts']:
-                    if part.get('mimeType') == 'text/plain':
-                        data = part.get('body', {}).get('data', '')
-                        if data:
-                            import base64
-                            body = base64.urlsafe_b64decode(data).decode('utf-8', errors='ignore')
-                            break
-
-            tx = parse_transaction(snippet, subject, body, headers, internal_date_ms)
-            if tx:
-                row = {
-                    "email_id": str(msg_id),
-                    "amount": float(tx["amount"]),
-                    "payment_mode": str(tx["payment_mode"]),
-                    "type": str(tx["type"]),
-                    "description": str(tx["description"]),
-                    "date": str(tx["date"])
-                }
-                supabase.table('transactions').insert(row).execute()
-                print(f"--> LOGGED [{tx['date']}]: ₹{tx['amount']} via {tx['payment_mode']} ({tx['type']})")
-                logged_count += 1
-        except Exception as e:
-            print(f"Error: {e}")
-            
-    print(f"Sync complete. Logged {logged_count} new transactions.")
+        msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
+        snippet = msg_data.get('snippet', '')
+        
+        parsed_data = parse_transaction_email(snippet)
+        if parsed_data:
+            response = push_to_supabase(parsed_data)
+            print(f"Pushed transaction Rs. {parsed_data['amount']} -> Supabase Success")
 
 if __name__ == '__main__':
-    sync_transactions()
+    main()
