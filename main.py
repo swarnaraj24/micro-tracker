@@ -27,9 +27,15 @@ def get_gmail_service():
             token.write(creds.to_json())
     return build('gmail', 'v1', credentials=creds)
 
-def parse_transaction_email(msg_id, internal_date_ms, snippet):
-    # Flexible regex to catch amounts following Rs, INR, or ₹
-    amount_match = re.search(r'(?i)(?:rs\.?|inr|₹)\s*([0-9,]+\.?[0-9]*)', snippet)
+def parse_transaction_email(msg_id, internal_date_ms, subject, body_text):
+    full_text = (subject + " " + body_text).lower()
+    
+    # Filter out promotional / marketing emails completely
+    if any(keyword in full_text for keyword in ["offer", "discount", "cashback", "reward", "jumbo loan", "pre-approved", "upgrade"]):
+        return None
+
+    # Search for amount in the full body text
+    amount_match = re.search(r'(?i)(?:rs\.?|inr|₹)\s*([0-9,]+\.?[0-9]*)', body_text)
     if not amount_match:
         return None
     
@@ -39,18 +45,33 @@ def parse_transaction_email(msg_id, internal_date_ms, snippet):
     except ValueError:
         return None
 
-    tx_type = "expense" if re.search(r'(?i)debited|spent|paid', snippet) else "income"
+    # Determine transaction type (Expense vs Income)
+    if any(word in full_text for word in ["debited", "spent", "paid", "sent", "dr", "purchase"]):
+        tx_type = "expense"
+    elif any(word in full_text for word in ["credited", "received", "added", "cr", "cashback received"]):
+        tx_type = "income"
+    else:
+        return None
 
-    # Convert Gmail's millisecond timestamp into a real YYYY-MM-DD date string
+    # Determine payment mode dynamically
+    if "upi" in full_text or "@" in full_text:
+        payment_mode = "UPI"
+    elif "card" in full_text or "cc" in full_text or "dc" in full_text:
+        payment_mode = "Card"
+    elif "imps" in full_text or "neft" in full_text or "rtgs" in full_text:
+        payment_mode = "Bank Transfer"
+    else:
+        payment_mode = "Other"
+
     tx_date = datetime.fromtimestamp(int(internal_date_ms) / 1000.0).strftime('%Y-%m-%d')
 
     return {
         "email_id": msg_id,
         "amount": amount,
-        "payment_mode": "UPI",
+        "payment_mode": payment_mode,
         "type": tx_type,
-        "description": snippet[:100],
-        "date": tx_date  # Actual transaction date extracted from email metadata
+        "description": body_text.strip()[:150],  # Capture clean preview of full body
+        "date": tx_date
     }
 
 def push_to_supabase(data):
@@ -73,16 +94,33 @@ def main():
     print(f"Found {len(messages)} messages to process.")
 
     for msg in messages:
-        # Fetch full message including internalDate
+        # Fetch full raw content to parse plaintext body
         msg_data = service.users().messages().get(userId='me', id=msg['id'], format='full').execute()
-        snippet = msg_data.get('snippet', '')
         internal_date = msg_data.get('internalDate', '')
         
-        parsed_data = parse_transaction_email(msg['id'], internal_date, snippet)
+        headers = msg_data.get('payload', {}).get('headers', [])
+        subject = next((h['value'] for h in headers if h['name'].lower() == 'subject'), '')
+        
+        # Extract full plain text body recursively from message parts
+        body_text = ""
+        payload = msg_data.get('payload', {})
+        if 'body' in payload and 'data' in payload['body']:
+            body_text = base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8', errors='ignore')
+        elif 'parts' in payload:
+            for part in payload['parts']:
+                if part.get('mimeType') == 'text/plain' and 'data' in part.get('body', {}):
+                    body_text = base64.urlsafe_b64decode(part['body']['data']).decode('utf-8', errors='ignore')
+                    break
+        
+        # Fallback to snippet if body extraction is empty
+        if not body_text:
+            body_text = msg_data.get('snippet', '')
+
+        parsed_data = parse_transaction_email(msg['id'], internal_date, subject, body_text)
         if parsed_data:
             try:
                 push_to_supabase(parsed_data)
-                print(f"Pushed transaction Rs. {parsed_data['amount']} on {parsed_data['date']} -> Supabase Success")
+                print(f"Pushed Rs. {parsed_data['amount']} ({parsed_data['type']} - {parsed_data['payment_mode']}) on {parsed_data['date']} -> Success")
             except Exception as e:
                 print(f"Skipping message ID {msg['id']} (likely duplicate): {e}")
 
