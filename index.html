@@ -3,207 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Micro Finance Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>3D Financial Tracker</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans antialiased min-h-screen p-6">
+<body>
 
-    <div class="max-w-6xl mx-auto space-y-6">
-        <header class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-800">Micro Finance Tracker</h1>
-                <p class="text-sm text-gray-500">Automated Gmail Transaction Parser & Analytics</p>
-            </div>
-            <button onclick="loadDashboard()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm cursor-pointer">
-                Refresh Data
-            </button>
+    <div class="dashboard-container">
+        <header>
+            <h1>Transaction Intelligence</h1>
         </header>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Income</p>
-                <p id="total-income" class="text-2xl font-bold text-green-600 mt-1">₹0</p>
+        <!-- 3D Interactive Animated Cards -->
+        <div class="stats-grid">
+            <div class="stat-card income">
+                <div class="stat-title">Total Received (Income)</div>
+                <div class="stat-amount" id="total-income">₹0.00</div>
             </div>
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Expenditure</p>
-                <p id="total-expense" class="text-2xl font-bold text-red-600 mt-1">₹0</p>
-            </div>
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Credit Card / RuPay</p>
-                <p id="cc-spend" class="text-2xl font-bold text-indigo-600 mt-1">₹0</p>
-            </div>
-            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">UPI / Debit</p>
-                <p id="upi-spend" class="text-2xl font-bold text-blue-600 mt-1">₹0</p>
+            <div class="stat-card expense">
+                <div class="stat-title">Total Spent (Expense)</div>
+                <div class="stat-amount" id="total-expense">₹0.00</div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 class="text-sm font-semibold text-gray-700 mb-4">Spending by Payment Mode</h3>
-                <div class="relative h-64 flex justify-center">
-                    <canvas id="paymentModeChart"></canvas>
+        <!-- Recent Logs Section -->
+        <div class="transactions-section">
+            <h2>Recent Activity</h2>
+            <div class="transaction-list" id="transaction-list">
+                <!-- Dynamically loaded records go here -->
+                <div class="transaction-item">
+                    <div class="tx-info">
+                        <span class="tx-desc">Loading transactions...</span>
+                        <span class="tx-date">--</span>
+                    </div>
+                    <span class="tx-amount">₹0.00</span>
                 </div>
-            </div>
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <h3 class="text-sm font-semibold text-gray-700 mb-4">Income vs Expenditure</h3>
-                <div class="relative h-64 flex justify-center">
-                    <canvas id="incomeExpenseChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="p-6 border-b border-gray-100">
-                <h3 class="text-lg font-bold text-gray-800">Recent Transactions</h3>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-400 uppercase text-xs tracking-wider border-b border-gray-100">
-                            <th class="py-3 px-6">Date</th>
-                            <th class="py-3 px-6">Description</th>
-                            <th class="py-3 px-6">Mode</th>
-                            <th class="py-3 px-6 text-right">Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transaction-table-body" class="divide-y divide-gray-100 text-sm text-gray-700">
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
 
+    <!-- Script to hook into Supabase if hosted, or handle UI updates -->
     <script>
-        const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkD6R_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
-        const dbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let paymentChartInstance = null;
-        let incomeChartInstance = null;
-
-        async function loadDashboard() {
-            try {
-                const { data: transactions, error } = await dbClient
-                    .from('transactions')
-                    .select('*')
-                    .order('date', { ascending: false });
-
-                if (error) {
-                    console.error('Supabase error:', error);
-                    return;
-                }
-
-                let totalIncome = 0;
-                let totalExpense = 0;
-                let ccSpend = 0;
-                let upiSpend = 0;
-
-                const tableBody = document.getElementById('transaction-table-body');
-                tableBody.innerHTML = '';
-
-                if (!transactions || transactions.length === 0) {
-                    tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-gray-400">No transactions found. Run your GitHub Actions sync workflow!</td></tr>`;
-                    return;
-                }
-
-                transactions.forEach(tx => {
-                    const amt = Number(tx.amount) || 0;
-                    if (tx.type === 'income') {
-                        totalIncome += amt;
-                    } else if (tx.type === 'expense') {
-                        totalExpense += amt;
-                        if (tx.payment_mode && tx.payment_mode.toLowerCase().includes('credit')) {
-                            ccSpend += amt;
-                        } else {
-                            upiSpend += amt;
-                        }
-                    }
-
-                    const row = document.createElement('tr');
-                    row.className = "hover:bg-gray-50/50 transition";
-                    
-                    let badgeColor = 'bg-blue-50 text-blue-700';
-                    let amountDisplay = `-₹${amt.toLocaleString('en-IN')}`;
-                    let amountColor = 'text-gray-900';
-
-                    if (tx.type === 'income') {
-                        badgeColor = 'bg-green-50 text-green-700';
-                        amountDisplay = `+₹${amt.toLocaleString('en-IN')}`;
-                        amountColor = 'text-green-600';
-                    } else if (tx.type === 'bill_payment') {
-                        badgeColor = 'bg-amber-50 text-amber-700';
-                        amountDisplay = `₹${amt.toLocaleString('en-IN')} (Settled)`;
-                        amountColor = 'text-amber-600';
-                    }
-
-                    row.innerHTML = `
-                        <td class="py-4 px-6 font-medium text-gray-600 whitespace-nowrap">${tx.date || 'N/A'}</td>
-                        <td class="py-4 px-6 text-gray-800 max-w-xs truncate">${tx.description || 'Transaction'}</td>
-                        <td class="py-4 px-6 whitespace-nowrap">
-                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${badgeColor}">
-                                ${tx.payment_mode || 'UPI'}
-                            </span>
-                        </td>
-                        <td class="py-4 px-6 text-right font-bold ${amountColor}">
-                            ${amountDisplay}
-                        </td>
-                    `;
-                    tableBody.appendChild(row);
-                });
-
-                document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN')}`;
-                document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN')}`;
-                document.getElementById('cc-spend').innerText = `₹${ccSpend.toLocaleString('en-IN')}`;
-                document.getElementById('upi-spend').innerText = `₹${upiSpend.toLocaleString('en-IN')}`;
-
-                updateCharts(ccSpend, upiSpend, totalIncome, totalExpense);
-
-            } catch (err) {
-                console.error('Error loading dashboard data:', err);
-            }
+        // Example client binding placeholder for your front-end view
+        async function fetchDashboardData() {
+            // Fetch records from your Supabase transactions table here
         }
-
-        function updateCharts(cc, upi, income, expense) {
-            const ctxPayment = document.getElementById('paymentModeChart').getContext('2d');
-            if (paymentChartInstance) paymentChartInstance.destroy();
-            paymentChartInstance = new Chart(ctxPayment, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Credit Card / RuPay', 'UPI / Debit'],
-                    datasets: [{
-                        data: [cc, upi],
-                        backgroundColor: ['#6366f1', '#3b82f6'],
-                        borderWidth: 0
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-
-            const ctxIncome = document.getElementById('incomeExpenseChart').getContext('2d');
-            if (incomeChartInstance) incomeChartInstance.destroy();
-            incomeChartInstance = new Chart(ctxIncome, {
-                type: 'bar',
-                data: {
-                    labels: ['Income', 'Expenditure'],
-                    datasets: [{
-                        data: [income, expense],
-                        backgroundColor: ['#22c55e', '#ef4444'],
-                        borderRadius: 8
-                    }]
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } }
-                }
-            });
-        }
-
-        window.loadDashboard = loadDashboard;
-        loadDashboard();
     </script>
 </body>
 </html>
