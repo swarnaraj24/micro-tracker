@@ -207,6 +207,19 @@
 
         let allTransactions = [];
 
+        // Spam & Marketing Blocklist Check
+        function isJunkOrSpam(text) {
+            if (!text) return false;
+            const lower = text.toLowerCase();
+            const junkKeywords = [
+                'cart', 'waiting in your', 'offer', 'reward', 'cashback', 
+                'pre-approved', 'loan', 'policy', 'bonus', 'upgrade', 
+                'diwali', 'karwa chauth', 'smartemi', 'registration', 
+                'welcome', 'save up to', 'health benefits', 'interest rate'
+            ];
+            return junkKeywords.some(keyword => lower.includes(keyword));
+        }
+
         function cleanDescription(rawText) {
             if (!rawText) return 'Bank Transaction';
             const lower = rawText.toLowerCase();
@@ -218,7 +231,6 @@
             if (lower.includes('amazon')) return 'Amazon Shopping';
             if (lower.includes('flipkart')) return 'Flipkart Order';
             
-            // Only flag as salary/funds credited if it genuinely is an incoming deposit and NOT an expense
             if ((lower.includes('salary') || lower.includes('credited')) && !lower.includes('debited') && !lower.includes('spent') && !lower.includes('paid')) {
                 return 'Salary / Funds Credited';
             }
@@ -244,7 +256,8 @@
             const { data, error } = await _supabase.from('transactions').select('*').order('date', { ascending: false });
             if (error) { console.error(error); return; }
 
-            allTransactions = data || [];
+            // Filter out any spam/marketing rows immediately
+            allTransactions = (data || []).filter(tx => !isJunkOrSpam(tx.description));
             renderTable(allTransactions);
         }
 
@@ -265,7 +278,6 @@
                 const amount = Number(tx.amount);
                 const rawLower = (tx.description || '').toLowerCase();
                 
-                // Strict check: if it mentions debited/spent/paid or was logged as expense, treat as expense
                 let isIncome = tx.type === 'income' || (rawLower.includes('credited') && !rawLower.includes('debited') && !rawLower.includes('spent') && !rawLower.includes('paid'));
                 if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) {
                     isIncome = false;
@@ -319,7 +331,7 @@
         }
 
         function escapeHtml(str) {
-            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] => tag));
         }
 
         loadDashboardData();
