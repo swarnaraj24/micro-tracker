@@ -4,18 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Transaction Intelligence</title>
+    <!-- Include Supabase JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-
-        /* Prevent unwanted text background selection highlights */
-        ::selection {
-            background: #2563eb;
-            color: #ffffff;
         }
 
         body {
@@ -92,6 +88,8 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+            max-height: 450px;
+            overflow-y: auto;
         }
 
         .transaction-item {
@@ -160,7 +158,7 @@
             <div class="transaction-list" id="transaction-list">
                 <div class="transaction-item">
                     <div class="tx-info">
-                        <span class="tx-desc">Connected and ready for data</span>
+                        <span class="tx-desc">Loading records from Supabase...</span>
                         <span class="tx-date">--</span>
                     </div>
                     <span class="tx-amount">₹0.00</span>
@@ -169,5 +167,43 @@
         </div>
     </div>
 
-</body>
-</html>
+    <!-- Frontend Supabase Client Connection & Rendering Logic -->
+    <script>
+        const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkD6R_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
+
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function loadDashboardData() {
+            try {
+                const { data, error } = await _supabase
+                    .from('transactions')
+                    .select('*')
+                    .order('date', { ascending: false });
+
+                if (error) {
+                    console.error('Error fetching data:', error);
+                    return;
+                }
+
+                let totalIncome = 0;
+                let totalExpense = 0;
+                const listContainer = document.getElementById('transaction-list');
+                listContainer.innerHTML = '';
+
+                if (!data || data.length === 0) {
+                    listContainer.innerHTML = '<div class="transaction-item"><div class="tx-info"><span class="tx-desc">No transactions found</span></div></div>';
+                    return;
+                }
+
+                data.forEach(tx => {
+                    const amount = Number(tx.amount);
+                    if (tx.type === 'income' || tx.type === 'bill_payment' && tx.type === 'income') {
+                        totalIncome += amount;
+                    } else if (tx.type === 'expense') {
+                        totalExpense += amount;
+                    }
+
+                    const item = document.createElement('div');
+                    item.className = 'transaction-item';
