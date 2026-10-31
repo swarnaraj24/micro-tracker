@@ -19,6 +19,7 @@ body{font-family:Sora,system-ui,sans-serif;background:var(--bg);color:var(--tx);
 h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin-bottom:22px}
 .bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
 .bar input,.bar select{background:var(--card);border:1px solid var(--line);color:var(--tx);padding:11px 14px;border-radius:12px;font:inherit;font-size:.9rem;backdrop-filter:blur(14px)}
+.bar select option{background:#0f172a;color:#eef2ff}
 .bar input{flex:1;min-width:180px}
 .bar :focus-visible{outline:2px solid var(--acc)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:22px;perspective:1000px}
@@ -51,7 +52,7 @@ td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
   <h1>Money Flow</h1>
   <div class="bar">
     <input id="q" placeholder="Search merchant or mode" aria-label="Search">
-    <select id="month" aria-label="Month"></select>
+    <select id="month" aria-label="Month"><option value="all">All months</option></select>
     <select id="type" aria-label="Type"><option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="bill_payment">Card bill payments</option></select>
   </div>
   <div class="grid">
@@ -70,7 +71,7 @@ td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
 </div>
 <script>
 const SB_URL='https://sxdkghnpltvdvlkblkps.supabase.co';
-const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkR_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkD6R_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
 const $=id=>document.getElementById(id);
 const fmt=n=>'\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -88,20 +89,20 @@ function bars(el,map){const rows=Object.entries(map).sort((a,b)=>b[1]-a[1]).slic
 
 function render(){
  const q=$('q').value.toLowerCase(),m=$('month').value,t=$('type').value;
- const rows=all.filter(x=>(m==='all'||x.date.startsWith(m))&&(t==='all'||x.type===t)&&((x.description+' '+x.payment_mode).toLowerCase().includes(q)));
+ const rows=all.filter(x=>(m==='all'||(x.date||'').startsWith(m))&&(t==='all'||x.type===t)&&(((x.description||'')+' '+(x.payment_mode||'')).toLowerCase().includes(q)));
  let i=0,o=0;const cm={},tm={};
- rows.forEach(x=>{const a=Number(x.amount);if(x.type==='income')i+=a;else if(x.type==='expense'){o+=a;cm[cat(x.description)]=(cm[cat(x.description)]||0)+a;tm[x.description]=(tm[x.description]||0)+a}});
+ rows.forEach(x=>{const a=Number(x.amount),d=x.description||'';if(x.type==='income')i+=a;else if(x.type==='expense'){o+=a;cm[cat(d)]=(cm[cat(d)]||0)+a;tm[d]=(tm[d]||0)+a}});
  count($('sIn'),i);count($('sOut'),o);count($('sNet'),i-o);$('sCnt').textContent=rows.length;
  bars($('cats'),cm);bars($('tops'),tm);
- $('body').innerHTML=rows.length?rows.map(x=>{const inc=x.type==='income',exp=x.type==='expense';
-  return `<tr><td>${esc(x.date)}</td><td>${esc(x.description)} <span class="pill">${inc?'Income':cat(x.description)}</span></td><td>${esc(x.payment_mode)}</td><td class="t-${esc(x.type)}">${x.type==='bill_payment'?'Card bill':inc?'Income':'Expense'}</td><td class="amt ${inc?'t-income':exp?'t-expense':'t-bill_payment'}">${inc?'+':exp?'-':''}${fmt(x.amount)}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">No transactions match these filters</td></tr>'}
+ $('body').innerHTML=rows.length?rows.map(x=>{const inc=x.type==='income',exp=x.type==='expense',d=x.description||'';
+  return `<tr><td>${esc(x.date)}</td><td>${esc(d)} <span class="pill">${inc?'Income':cat(d)}</span></td><td>${esc(x.payment_mode)}</td><td class="t-${esc(x.type)}">${x.type==='bill_payment'?'Card bill':inc?'Income':'Expense'}</td><td class="amt ${inc?'t-income':exp?'t-expense':'t-bill_payment'}">${inc?'+':exp?'-':''}${fmt(x.amount)}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">No transactions match these filters</td></tr>'}
 
 async function load(){
  const sb=supabase.createClient(SB_URL,SB_KEY);
  const {data,error}=await sb.from('transactions').select('*').order('date',{ascending:false});
- if(error){$('body').innerHTML='<tr><td colspan="5" class="empty">Could not load data. Check the Supabase URL, key and read policy.</td></tr>';return}
+ if(error){console.error(error);$('body').innerHTML='<tr><td colspan="5" class="empty">Could not load data: '+esc(error.message)+'</td></tr>';return}
  all=data||[];
- const months=[...new Set(all.map(x=>x.date.slice(0,7)))].sort().reverse();
+ const months=[...new Set(all.map(x=>(x.date||'').slice(0,7)).filter(Boolean))].sort().reverse();
  $('month').innerHTML='<option value="all">All months</option>'+months.map(x=>`<option value="${x}">${x}</option>`).join('');
  if(months[0])$('month').value=months[0];
  render();
