@@ -1,340 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transaction Intelligence Pro</title>
-    <!-- Supabase JS Client & Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-
-        body {
-            background-color: #080c14;
-            color: #ffffff;
-            padding: 40px 20px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 1100px;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
-        }
-
-        header h1 {
-            font-size: 2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .controls-bar {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .controls-bar input, .controls-bar select {
-            background: rgba(17, 24, 39, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 12px 16px;
-            border-radius: 12px;
-            color: white;
-            font-size: 0.95rem;
-            outline: none;
-            backdrop-filter: blur(16px);
-        }
-
-        .controls-bar input { flex: 1; }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background: rgba(17, 24, 39, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 24px;
-            backdrop-filter: blur(16px);
-        }
-
-        .stat-title {
-            font-size: 0.8rem;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
-
-        .stat-amount {
-            font-size: 2.25rem;
-            font-weight: 800;
-        }
-
-        .stat-amount.income { color: #10b981; }
-        .stat-amount.expense { color: #ef4444; }
-
-        .table-section {
-            background: rgba(17, 24, 39, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 24px;
-            backdrop-filter: blur(16px);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-        }
-
-        th {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #94a3b8;
-            background: rgba(11, 15, 20, 0.8);
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        td {
-            padding: 14px 16px;
-            font-size: 0.95rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            color: #f3f4f6;
-        }
-
-        tr:hover td { background: rgba(30, 41, 59, 0.5); }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            font-size: 0.75rem;
-            font-weight: 700;
-            border-radius: 6px;
-        }
-
-        .badge.expense { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-        .badge.income { background: rgba(16, 185, 129, 0.15); color: #10b981; }
-        .badge.category { background: rgba(59, 130, 246, 0.15); color: #3b82f6; margin-left: 6px; }
-
-        .truncate-desc {
-            max-width: 350px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .amount-text.income { color: #10b981; font-weight: 700; }
-        .amount-text.expense { color: #ef4444; font-weight: 700; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Flow</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#070b16;--card:rgba(20,28,48,.62);--line:rgba(255,255,255,.09);--tx:#eef2ff;--mute:#8a96b5;--in:#34d399;--out:#fb7185;--acc:#818cf8}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Sora,system-ui,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;overflow-x:hidden}
+.scene{position:fixed;inset:0;perspective:900px;pointer-events:none;z-index:0}
+.orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;transition:transform .25s ease-out}
+.o1{width:380px;height:380px;background:#4f46e5;left:8%;top:6%}
+.o2{width:320px;height:320px;background:#0ea5e9;right:6%;top:30%}
+.o3{width:300px;height:300px;background:#10b981;left:35%;bottom:-8%;opacity:.3}
+.wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:36px 18px 60px}
+h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin-bottom:22px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.bar input,.bar select{background:var(--card);border:1px solid var(--line);color:var(--tx);padding:11px 14px;border-radius:12px;font:inherit;font-size:.9rem;backdrop-filter:blur(14px)}
+.bar input{flex:1;min-width:180px}
+.bar :focus-visible{outline:2px solid var(--acc)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:22px;perspective:1000px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;backdrop-filter:blur(14px);transform-style:preserve-3d;transition:transform .15s ease-out,box-shadow .2s;will-change:transform}
+.tilt:hover{box-shadow:0 24px 50px -20px rgba(99,102,241,.45)}
+.card .l{font-size:.78rem;color:var(--mute);margin-bottom:10px;transform:translateZ(14px)}
+.card .v{font-size:1.9rem;font-weight:800;transform:translateZ(34px);font-variant-numeric:tabular-nums}
+.in .v{color:var(--in)}.out .v{color:var(--out)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:22px}
+.card h2{font-size:.95rem;font-weight:600;margin-bottom:14px}
+.row{display:grid;grid-template-columns:110px 1fr auto;gap:10px;align-items:center;font-size:.85rem;margin-bottom:9px}
+.track{height:8px;background:rgba(255,255,255,.06);border-radius:8px;overflow:hidden}
+.fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--acc),#38bdf8);width:0;transition:width .9s cubic-bezier(.2,.8,.2,1)}
+.num{color:var(--mute);font-variant-numeric:tabular-nums}
+.tablecard{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:620px}
+th{text-align:left;font-size:.75rem;font-weight:600;color:var(--mute);padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:13px 12px;font-size:.88rem;border-bottom:1px solid rgba(255,255,255,.04)}
+tbody tr:hover td{background:rgba(129,140,248,.07)}
+td.amt{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.pill{font-size:.72rem;padding:3px 9px;border-radius:20px;background:rgba(129,140,248,.15);color:#a5b4fc}
+.t-income{color:var(--in)}.t-expense{color:var(--out)}.t-bill_payment{color:var(--mute)}
+.empty{text-align:center;color:var(--mute);padding:26px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
 </head>
 <body>
+<div class="scene"><div class="orb o1" data-d="30"></div><div class="orb o2" data-d="-22"></div><div class="orb o3" data-d="14"></div></div>
+<div class="wrap">
+  <h1>Money Flow</h1>
+  <div class="bar">
+    <input id="q" placeholder="Search merchant or mode" aria-label="Search">
+    <select id="month" aria-label="Month"></select>
+    <select id="type" aria-label="Type"><option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option><option value="bill_payment">Card bill payments</option></select>
+  </div>
+  <div class="grid">
+    <div class="card tilt in"><div class="l">Money in</div><div class="v" id="sIn">0</div></div>
+    <div class="card tilt out"><div class="l">Money out</div><div class="v" id="sOut">0</div></div>
+    <div class="card tilt"><div class="l">Net</div><div class="v" id="sNet">0</div></div>
+    <div class="card tilt"><div class="l">Transactions</div><div class="v" id="sCnt">0</div></div>
+  </div>
+  <div class="two">
+    <div class="card"><h2>Spending by category</h2><div id="cats"></div></div>
+    <div class="card"><h2>Top merchants</h2><div id="tops"></div></div>
+  </div>
+  <div class="card tablecard">
+    <table><thead><tr><th>Date</th><th>Description</th><th>Mode</th><th>Type</th><th style="text-align:right">Amount</th></tr></thead><tbody id="body"><tr><td colspan="5" class="empty">Loading</td></tr></tbody></table>
+  </div>
+</div>
+<script>
+const SB_URL='https://sxdkghnpltvdvlkblkps.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkR_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
+const $=id=>document.getElementById(id);
+const fmt=n=>'\u20b9'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CATS=[['Food',/swiggy|zomato|zepto|blinkit|restaurant|cafe|food/i],['Travel',/uber|ola|rapido|metro|irctc|redbus|fuel|petrol/i],['Shopping',/amazon|flipkart|myntra|ajio/i],['Subscriptions',/netflix|spotify|prime|hotstar|youtube/i],['Utilities',/electric|bill|recharge|jio|airtel|gas/i]];
+const cat=d=>(CATS.find(c=>c[1].test(d))||['Other'])[0];
+let all=[];
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
 
-    <div class="container">
-        <header>
-            <h1>Transaction Intelligence</h1>
-        </header>
+function count(el,to){if(reduce){el.textContent=fmt(to);return}const s=performance.now(),f=+el.dataset.v||0;el.dataset.v=to;
+ (function step(t){const p=Math.min((t-s)/700,1),e=1-Math.pow(1-p,3);el.textContent=fmt(f+(to-f)*e);if(p<1)requestAnimationFrame(step)})(s)}
 
-        <!-- Search & Filter Controls Bar -->
-        <div class="controls-bar">
-            <input type="text" id="searchInput" placeholder="Search merchant or description..." oninput="filterTable()">
-            <select id="typeFilter" onchange="filterTable()">
-                <option value="all">All Types</option>
-                <option value="expense">Expenses Only</option>
-                <option value="income">Income Only</option>
-            </select>
-        </div>
+function bars(el,map){const rows=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,6);const max=rows[0]?rows[0][1]:1;
+ el.innerHTML=rows.length?rows.map(([k,v])=>`<div class="row"><span>${esc(k)}</span><div class="track"><div class="fill" data-w="${v/max*100}"></div></div><span class="num">${fmt(v)}</span></div>`).join(''):'<div class="empty">No spending yet</div>';
+ requestAnimationFrame(()=>el.querySelectorAll('.fill').forEach(f=>f.style.width=f.dataset.w+'%'))}
 
-        <!-- Stat Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-title">Total Received (Income)</div>
-                <div class="stat-amount income" id="total-income">₹0.00</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-title">Total Spent (Expense)</div>
-                <div class="stat-amount expense" id="total-expense">₹0.00</div>
-            </div>
-        </div>
+function render(){
+ const q=$('q').value.toLowerCase(),m=$('month').value,t=$('type').value;
+ const rows=all.filter(x=>(m==='all'||x.date.startsWith(m))&&(t==='all'||x.type===t)&&((x.description+' '+x.payment_mode).toLowerCase().includes(q)));
+ let i=0,o=0;const cm={},tm={};
+ rows.forEach(x=>{const a=Number(x.amount);if(x.type==='income')i+=a;else if(x.type==='expense'){o+=a;cm[cat(x.description)]=(cm[cat(x.description)]||0)+a;tm[x.description]=(tm[x.description]||0)+a}});
+ count($('sIn'),i);count($('sOut'),o);count($('sNet'),i-o);$('sCnt').textContent=rows.length;
+ bars($('cats'),cm);bars($('tops'),tm);
+ $('body').innerHTML=rows.length?rows.map(x=>{const inc=x.type==='income',exp=x.type==='expense';
+  return `<tr><td>${esc(x.date)}</td><td>${esc(x.description)} <span class="pill">${inc?'Income':cat(x.description)}</span></td><td>${esc(x.payment_mode)}</td><td class="t-${esc(x.type)}">${x.type==='bill_payment'?'Card bill':inc?'Income':'Expense'}</td><td class="amt ${inc?'t-income':exp?'t-expense':'t-bill_payment'}">${inc?'+':exp?'-':''}${fmt(x.amount)}</td></tr>`}).join(''):'<tr><td colspan="5" class="empty">No transactions match these filters</td></tr>'}
 
-        <!-- Ledger Table -->
-        <div class="table-section">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Description & Category</th>
-                        <th>Mode</th>
-                        <th>Type</th>
-                        <th style="text-align: right;">Amount</th>
-                    </tr>
-                </thead>
-                <tbody id="transaction-table-body">
-                    <tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">Loading database records...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+async function load(){
+ const sb=supabase.createClient(SB_URL,SB_KEY);
+ const {data,error}=await sb.from('transactions').select('*').order('date',{ascending:false});
+ if(error){$('body').innerHTML='<tr><td colspan="5" class="empty">Could not load data. Check the Supabase URL, key and read policy.</td></tr>';return}
+ all=data||[];
+ const months=[...new Set(all.map(x=>x.date.slice(0,7)))].sort().reverse();
+ $('month').innerHTML='<option value="all">All months</option>'+months.map(x=>`<option value="${x}">${x}</option>`).join('');
+ if(months[0])$('month').value=months[0];
+ render();
+}
+['q','month','type'].forEach(id=>$(id).addEventListener('input',render));
 
-    <script>
-        const SUPABASE_URL = 'https://sxdkghnpltvdvlkblkps.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN4ZGtnaG5wbHR2ZHZsa2Jsa3BzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMyNjU5NTYsImV4cCI6MjEwODg0MTk1Nn0.2rm0p2gvSKkD6R_0YcONkg4vTyX_kdhDxfKS4AUnN3U';
-
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-        let allTransactions = [];
-
-        // Strict Spam & Marketing Blocklist Check
-        function isJunkOrSpam(text) {
-            if (!text) return false;
-            const lower = text.toLowerCase();
-            const junkKeywords = [
-                'cart', 'waiting in your', 'offer', 'reward', 'cashback', 
-                'pre-approved', 'loan', 'policy', 'bonus', 'upgrade', 
-                'diwali', 'karwa chauth', 'smartemi', 'registration', 
-                'welcome', 'save up to', 'health benefits', 'interest rate'
-            ];
-            return junkKeywords.some(keyword => lower.includes(keyword));
-        }
-
-        function cleanDescription(rawText) {
-            if (!rawText) return 'Bank Transaction';
-            const lower = rawText.toLowerCase();
-
-            if (lower.includes('swiggy')) return 'Swiggy Food Order';
-            if (lower.includes('zomato')) return 'Zomato Order';
-            if (lower.includes('uber')) return 'Uber Ride';
-            if (lower.includes('ola')) return 'Ola Cab';
-            if (lower.includes('amazon')) return 'Amazon Shopping';
-            if (lower.includes('flipkart')) return 'Flipkart Order';
-            
-            if ((lower.includes('salary') || lower.includes('credited')) && !lower.includes('debited') && !lower.includes('spent') && !lower.includes('paid')) {
-                return 'Salary / Funds Credited';
-            }
-            
-            let cleaned = rawText.replace(/^(Alert|Notification|Txn|Transaction|Info|You have done a UPI txn\. Check details!):\s*/i, '');
-            if (cleaned.length < 5 || cleaned.includes('Check details')) {
-                return 'UPI / Bank Transfer';
-            }
-            return cleaned.length > 40 ? cleaned.substring(0, 37) + '...' : cleaned;
-        }
-
-        function autoCategorize(text, isIncome) {
-            if (isIncome) return 'Income';
-            const lower = text.toLowerCase();
-            if (lower.includes('swiggy') || lower.includes('zomato') || lower.includes('food')) return 'Food';
-            if (lower.includes('uber') || lower.includes('ola') || lower.includes('metro')) return 'Travel';
-            if (lower.includes('amazon') || lower.includes('flipkart')) return 'Shopping';
-            if (lower.includes('electricity') || lower.includes('bill') || lower.includes('recharge')) return 'Utilities';
-            return 'General';
-        }
-
-        async function loadDashboardData() {
-            const { data, error } = await _supabase.from('transactions').select('*').order('date', { ascending: false });
-            if (error) { console.error(error); return; }
-
-            // Filter out any spam/marketing rows immediately
-            allTransactions = (data || []).filter(tx => !isJunkOrSpam(tx.description));
-            renderTable(allTransactions);
-        }
-
-        function renderTable(data) {
-            let totalIncome = 0;
-            let totalExpense = 0;
-            const tbody = document.getElementById('transaction-table-body');
-            tbody.innerHTML = '';
-
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8; padding: 20px;">No records found</td></tr>';
-                document.getElementById('total-income').innerText = '₹0.00';
-                document.getElementById('total-expense').innerText = '₹0.00';
-                return;
-            }
-
-            data.forEach(tx => {
-                const amount = Number(tx.amount);
-                const rawLower = (tx.description || '').toLowerCase();
-                
-                let isIncome = tx.type === 'income' || (rawLower.includes('credited') && !rawLower.includes('debited') && !rawLower.includes('spent') && !rawLower.includes('paid'));
-                if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) {
-                    isIncome = false;
-                }
-
-                const computedType = isIncome ? 'income' : 'expense';
-
-                if (computedType === 'income') totalIncome += amount;
-                else totalExpense += amount;
-
-                const cleanDesc = cleanDescription(tx.description);
-                const category = autoCategorize(tx.description || '', isIncome);
-                const tr = document.createElement('tr');
-                const sign = computedType === 'income' ? '+' : '-';
-                const amountClass = computedType === 'income' ? 'income' : 'expense';
-
-                tr.innerHTML = `
-                    <td>${tx.date || '--'}</td>
-                    <td class="truncate-desc" title="${escapeHtml(tx.description || '')}">
-                        ${escapeHtml(cleanDesc)}
-                        <span class="badge category">${category}</span>
-                    </td>
-                    <td>${tx.payment_mode || 'UPI'}</td>
-                    <td><span class="badge ${computedType}">${computedType.toUpperCase()}</span></td>
-                    <td style="text-align: right;" class="amount-text ${amountClass}">${sign}₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            document.getElementById('total-income').innerText = `₹${totalIncome.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-            document.getElementById('total-expense').innerText = `₹${totalExpense.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-        }
-
-        function filterTable() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const typeVal = document.getElementById('typeFilter').value;
-
-            const filtered = allTransactions.filter(tx => {
-                const rawLower = (tx.description || '').toLowerCase();
-                let isIncome = tx.type === 'income' || (rawLower.includes('credited') && !rawLower.includes('debited') && !rawLower.includes('spent') && !rawLower.includes('paid'));
-                if (rawLower.includes('debited') || rawLower.includes('spent') || rawLower.includes('paid')) isIncome = false;
-                const tName = isIncome ? 'income' : 'expense';
-
-                const matchesSearch = (tx.description || '').toLowerCase().includes(query) || (tx.payment_mode || '').toLowerCase().includes(query);
-                const matchesType = typeVal === 'all' || tName === typeVal;
-
-                return matchesSearch && matchesType;
-            });
-
-            renderTable(filtered);
-        }
-
-        function escapeHtml(str) {
-            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
-        }
-
-        loadDashboardData();
-    </script>
+if(!reduce){
+ document.querySelectorAll('.tilt').forEach(c=>{
+  c.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;c.style.transform=`rotateY(${x*14}deg) rotateX(${-y*14}deg) translateZ(10px)`});
+  c.addEventListener('pointerleave',()=>c.style.transform='');
+ });
+ addEventListener('pointermove',e=>{const x=e.clientX/innerWidth-.5,y=e.clientY/innerHeight-.5;
+  document.querySelectorAll('.orb').forEach(o=>{const d=+o.dataset.d;o.style.transform=`translate3d(${x*d*3}px,${y*d*3}px,0)`})});
+}
+load();
+</script>
 </body>
 </html>
